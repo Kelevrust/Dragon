@@ -13,15 +13,15 @@ MonoBehaviour:
   m_Name: Dire Wolf
   m_EditorClassIdentifier: Assembly-CSharp::UnitData
   id: 
-  unitName: 
+  unitName: Dire Wolf
   description: 
   tier: 1
   cost: 3
-  baseAttack: 0
-  baseHealth: 0
-  tribe: 0
+  baseAttack: 3
+  baseHealth: 3
+  tribe: 3
   abilityType: 0
   abilityDescription: 
-  artwork: {fileID: 0}
+  artwork: {fileID: 10913, guid: 0000000000000000f000000000000000, type: 0}
   frameColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   unitModelPrefab: {fileID: 0}
