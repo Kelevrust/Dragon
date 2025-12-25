@@ -12,9 +12,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0d06d26c5d3dfd242aaba68356e9a76f, type: 3}
   m_Name: Paladin
   m_EditorClassIdentifier: Assembly-CSharp::HeroData
-  heroName: 
+  heroName: Paladin
   description: 
   heroPortrait: {fileID: 0}
-  bonusType: 0
-  bonusValue: 0
+  bonusType: 1
+  bonusValue: 5
   startingUnit: {fileID: 0}

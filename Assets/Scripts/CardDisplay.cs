@@ -1,10 +1,10 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
-using UnityEngine.EventSystems; // Required for clicking
+using UnityEngine.EventSystems;
+using System.Collections.Generic;
 
-// We add IPointerClickHandler to detect clicks on UI elements
-public class CardDisplay : MonoBehaviour, IPointerClickHandler
+public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandler, IDragHandler, IEndDragHandler
 {
     public UnitData unitData;
 
@@ -17,59 +17,208 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler
     public Image frameImage;
 
     [Header("State")]
-    public bool isPurchased = false; // Is this in the shop or on board?
+    public bool isPurchased = false;
+    public bool isGolden = false;
+
+    public int currentAttack;
+    public int currentHealth;
+
+    // Drag State
+    private Transform originalParent;
+    private int originalIndex;
+    private CanvasGroup canvasGroup;
+    private Transform canvasTransform;
 
     void Start()
     {
-        if (unitData != null) LoadUnit(unitData);
+        if (unitData != null && !isGolden) LoadUnit(unitData);
+
+        canvasGroup = GetComponent<CanvasGroup>();
+        if (canvasGroup == null) canvasGroup = gameObject.AddComponent<CanvasGroup>();
+
+        Canvas canvas = GetComponentInParent<Canvas>();
+        if (canvas != null) canvasTransform = canvas.transform;
     }
 
     public void LoadUnit(UnitData data)
     {
         unitData = data;
-        if (nameText != null) nameText.text = data.unitName;
-        if (descriptionText != null) descriptionText.text = data.abilityDescription;
-        if (artworkImage != null) artworkImage.sprite = data.artwork;
-        if (attackText != null) attackText.text = data.baseAttack.ToString();
-        if (healthText != null) healthText.text = data.baseHealth.ToString();
-        if (frameImage != null) frameImage.color = data.frameColor;
+        currentAttack = data.baseAttack;
+        currentHealth = data.baseHealth;
+        UpdateVisuals();
     }
 
-    // This fires when you click the card
-    public void OnPointerClick(PointerEventData eventData)
+    public void MakeGolden()
     {
-        if (GameManager.instance.currentPhase != GameManager.GamePhase.Recruit) return;
+        isGolden = true;
+        currentAttack = unitData.baseAttack * 2;
+        currentHealth = unitData.baseHealth * 2;
+        UpdateVisuals();
+    }
 
-        // If in shop, try to buy
-        if (!isPurchased)
+    public void UpdateVisuals()
+    {
+        if (nameText != null) nameText.text = isGolden ? "Golden " + unitData.unitName : unitData.unitName;
+
+        // FIXED: Changed from abilityDescription to description to match new UnitData structure
+        if (descriptionText != null) descriptionText.text = unitData.description;
+
+        if (artworkImage != null) artworkImage.sprite = unitData.artwork;
+
+        if (attackText != null)
         {
-            TryBuyCard();
+            attackText.text = currentAttack.ToString();
+            attackText.color = isGolden ? Color.green : Color.black;
+        }
+
+        if (healthText != null)
+        {
+            healthText.text = currentHealth.ToString();
+            healthText.color = isGolden ? Color.green : Color.black;
+        }
+
+        if (frameImage != null)
+        {
+            frameImage.color = isGolden ? new Color(1f, 0.8f, 0.2f) : unitData.frameColor;
         }
     }
 
-    void TryBuyCard()
+    // --- DRAG IMPLEMENTATION ---
+
+    public void OnBeginDrag(PointerEventData eventData)
     {
-        int cost = unitData.cost;
+        if (GameManager.instance.currentPhase != GameManager.GamePhase.Recruit || GameManager.instance.isUnconscious)
+            return;
 
-        // Ask GameManager if we have money
-        if (GameManager.instance.TrySpendGold(cost))
+        originalParent = transform.parent;
+        originalIndex = transform.GetSiblingIndex();
+
+        if (canvasTransform != null) transform.SetParent(canvasTransform);
+        canvasGroup.blocksRaycasts = false;
+    }
+
+    public void OnDrag(PointerEventData eventData)
+    {
+        if (GameManager.instance.currentPhase != GameManager.GamePhase.Recruit || GameManager.instance.isUnconscious)
+            return;
+
+        transform.position = eventData.position;
+    }
+
+    public void OnEndDrag(PointerEventData eventData)
+    {
+        canvasGroup.blocksRaycasts = true;
+
+        if (GameManager.instance.currentPhase != GameManager.GamePhase.Recruit || GameManager.instance.isUnconscious)
         {
-            Debug.Log($"Bought {unitData.unitName}!");
+            ReturnToStart();
+            return;
+        }
 
-            // Move to Player Board
-            // Find the PlayerBoard object by name (Quick and dirty for MVP)
-            GameObject playerBoard = GameObject.Find("PlayerBoard");
+        List<RaycastResult> results = new List<RaycastResult>();
+        EventSystem.current.RaycastAll(eventData, results);
 
-            if (playerBoard != null)
+        bool actionHandled = false;
+
+        foreach (var result in results)
+        {
+            GameObject hitObject = result.gameObject;
+
+            // Case 1: Sell Button
+            if (hitObject.name.Contains("SellButton"))
             {
-                transform.SetParent(playerBoard.transform);
-                isPurchased = true; // Mark as owned
+                if (isPurchased)
+                {
+                    GameManager.instance.SellUnit(this);
+                    actionHandled = true;
+                    break;
+                }
+            }
+
+            // Case 2: Player Board (Buying OR Reordering)
+            bool hitBoard = hitObject.name == "PlayerBoard";
+            if (!hitBoard && hitObject.transform.parent != null)
+            {
+                hitBoard = hitObject.transform.parent.name == "PlayerBoard";
+            }
+
+            if (hitBoard)
+            {
+                Transform boardTransform = GameManager.instance.playerBoard;
+
+                // A. Buying from Shop
+                if (!isPurchased)
+                {
+                    if (GameManager.instance.gold >= unitData.cost)
+                    {
+                        if (GameManager.instance.TrySpendGold(unitData.cost))
+                        {
+                            transform.SetParent(boardTransform);
+                            isPurchased = true;
+                            GameManager.instance.CheckForTriples(unitData);
+                            actionHandled = true;
+                        }
+                    }
+                }
+                // B. Reordering Board
+                else
+                {
+                    transform.SetParent(boardTransform);
+                    int newIndex = 0;
+                    foreach (Transform child in boardTransform)
+                    {
+                        if (child == transform) continue;
+                        if (transform.position.x > child.position.x) newIndex++;
+                    }
+                    transform.SetSiblingIndex(newIndex);
+                    actionHandled = true;
+                }
+                break;
+            }
+        }
+
+        if (!actionHandled) ReturnToStart();
+    }
+
+    void ReturnToStart()
+    {
+        transform.SetParent(originalParent);
+        transform.SetSiblingIndex(originalIndex);
+    }
+
+    // --- CLICK LOGIC ---
+    public void OnPointerClick(PointerEventData eventData)
+    {
+        if (eventData.dragging) return;
+
+        if (GameManager.instance.currentPhase != GameManager.GamePhase.Recruit) return;
+        if (GameManager.instance.isUnconscious) return;
+
+        if (!isPurchased)
+        {
+            // Only buy on Double Click
+            if (eventData.clickCount >= 2)
+            {
+                int cost = unitData.cost;
+                if (GameManager.instance.gold >= cost)
+                {
+                    if (GameManager.instance.TrySpendGold(cost))
+                    {
+                        GameObject playerBoard = GameObject.Find("PlayerBoard");
+                        if (playerBoard != null)
+                        {
+                            transform.SetParent(playerBoard.transform);
+                            isPurchased = true;
+                            GameManager.instance.CheckForTriples(unitData);
+                        }
+                    }
+                }
             }
         }
         else
         {
-            Debug.Log("Not enough Gold!");
-            // Optional: Shake the card or flash red here later
+            // Single click selects owned units
+            GameManager.instance.SelectUnit(this);
         }
     }
 }
