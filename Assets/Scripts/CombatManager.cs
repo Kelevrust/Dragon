@@ -44,6 +44,9 @@ public class CombatManager : MonoBehaviour
     {
         if (GameManager.instance.currentPhase != GameManager.GamePhase.Recruit) return;
 
+        // LOG START
+        GameManager.instance.LogGameState("Pre-Combat");
+
         if (shopContainer != null) foreach (Transform child in shopContainer) Destroy(child.gameObject);
         
         SaveRoster();
@@ -54,6 +57,10 @@ public class CombatManager : MonoBehaviour
         
         StartCoroutine(CombatRoutine());
     }
+
+    // ... (Middle sections for SaveRoster, SpawnEnemies, CombatRoutine, AnimateAttack, GetUnits remain unchanged - skipping for brevity but they are implicitly included)
+    // IMPORTANT: When you paste, ensure you keep the full file content. 
+    // I will include the full file to be safe.
 
     void SaveRoster()
     {
@@ -99,7 +106,6 @@ public class CombatManager : MonoBehaviour
         List<CardDisplay> players = GetUnits(playerBoard);
         List<CardDisplay> enemies = GetUnits(enemyBoard);
 
-        // --- FIX: Use CURRENT stats (with Buffs) not Base stats ---
         Dictionary<CardDisplay, int> combatHealths = new Dictionary<CardDisplay, int>();
         Dictionary<CardDisplay, int> combatAttacks = new Dictionary<CardDisplay, int>();
 
@@ -110,7 +116,7 @@ public class CombatManager : MonoBehaviour
         }
         foreach (var e in enemies) 
         {
-            combatHealths[e] = e.currentHealth; // AI usually has base, but prepared for future buffs
+            combatHealths[e] = e.currentHealth; 
             combatAttacks[e] = e.currentAttack;
         }
 
@@ -124,7 +130,6 @@ public class CombatManager : MonoBehaviour
             CardDisplay pUnit = players[0];
             CardDisplay eUnit = enemies[0];
 
-            // Register tokens spawned mid-combat
             if (!combatHealths.ContainsKey(pUnit)) 
             {
                 combatHealths[pUnit] = pUnit.currentHealth;
@@ -139,14 +144,12 @@ public class CombatManager : MonoBehaviour
             yield return StartCoroutine(AnimateAttack(pUnit.transform, eUnit.transform));
             yield return StartCoroutine(AnimateAttack(eUnit.transform, pUnit.transform));
 
-            // Use the Snapshotted Attack values
             int pDmg = combatAttacks[eUnit];
             int eDmg = combatAttacks[pUnit];
 
             combatHealths[pUnit] -= pDmg;
             combatHealths[eUnit] -= eDmg;
 
-            // Visual Updates with Color Logic
             UpdateCombatVisuals(pUnit, combatHealths[pUnit]);
             UpdateCombatVisuals(eUnit, combatHealths[eUnit]);
 
@@ -159,7 +162,6 @@ public class CombatManager : MonoBehaviour
             yield return new WaitForSeconds(combatPace);
         }
 
-        // Damage Calculation
         enemies = GetUnits(enemyBoard);
         players = GetUnits(playerBoard);
         int damageTaken = 0;
@@ -176,13 +178,11 @@ public class CombatManager : MonoBehaviour
     void UpdateCombatVisuals(CardDisplay unit, int currentHp)
     {
         if (unit.healthText == null) return;
-        
         unit.healthText.text = currentHp.ToString();
-        
-        // Simple visual check for Red text during combat
+        int maxHp = unit.isGolden ? unit.unitData.baseHealth * 2 : unit.unitData.baseHealth;
         if (currentHp < unit.permanentHealth) unit.healthText.color = Color.red;
-        // Note: We don't revert to Green/Black here easily without tracking max, 
-        // leaving it Red is good for "Damaged" feedback.
+        else if (currentHp > maxHp) unit.healthText.color = Color.green;
+        else unit.healthText.color = Color.black;
     }
 
     void KillUnit(CardDisplay unit, List<CardDisplay> list, bool isEnemy)
@@ -246,6 +246,9 @@ public class CombatManager : MonoBehaviour
     {
         if (damageTaken > 0) GameManager.instance.ModifyHealth(-damageTaken);
 
+        // LOG END
+        GameManager.instance.LogGameState($"Post-Combat (Damage: {damageTaken})");
+
         if (GameManager.instance.playerHealth <= 0) DeathSaveManager.instance.StartDeathSequence();
         else StartCoroutine(ReturnToShopRoutine());
     }
@@ -266,6 +269,8 @@ public class CombatManager : MonoBehaviour
         }
         playerBoard.DetachChildren(); 
 
+        List<CardDisplay> spawnedCards = new List<CardDisplay>();
+
         foreach (SavedUnit snap in savedPlayerRoster)
         {
             GameObject newCard = Instantiate(cardPrefab, playerBoard);
@@ -274,9 +279,20 @@ public class CombatManager : MonoBehaviour
             cd.LoadUnit(snap.template);
             cd.isPurchased = true; 
             
+            spawnedCards.Add(cd);
+        }
+
+        yield return null;
+
+        for(int i=0; i<savedPlayerRoster.Count; i++)
+        {
+            if (i >= spawnedCards.Count) break;
+            
+            SavedUnit snap = savedPlayerRoster[i];
+            CardDisplay cd = spawnedCards[i];
+
             if (snap.isGolden) cd.MakeGolden(); 
             
-            // Restore Persistent Stats
             cd.permanentAttack = snap.permAttack;
             cd.permanentHealth = snap.permHealth;
             
@@ -287,10 +303,11 @@ public class CombatManager : MonoBehaviour
         GameManager.instance.turnNumber++;
         GameManager.instance.StartRecruitPhase();
         
-        // Re-Apply Auras so Wolf buffs come back
         if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
 
         ShopManager shop = FindFirstObjectByType<ShopManager>();
         if (shop != null) shop.RerollShop();
+        
+        Debug.Log("--- RETURN TO SHOP ---");
     }
 }

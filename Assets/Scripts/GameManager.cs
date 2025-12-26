@@ -1,7 +1,8 @@
 using UnityEngine;
-using TMPro; // This is required for TMP_Text
+using TMPro; 
 using System.Collections.Generic;
-using UnityEngine.UI; // Sometimes needed if standard UI elements are referenced
+using UnityEngine.UI; 
+using System.Text; 
 
 public class GameManager : MonoBehaviour
 {
@@ -10,7 +11,7 @@ public class GameManager : MonoBehaviour
     [Header("Hero Settings")]
     public HeroData activeHero; 
     public Transform playerBoard; 
-    public Transform playerHand; // NEW: Critical for CardDisplay
+    public Transform playerHand; 
     public GameObject cardPrefab; 
 
     [Header("Resources")]
@@ -48,6 +49,40 @@ public class GameManager : MonoBehaviour
         StartRecruitPhase();
     }
 
+    // --- ENHANCED LOGGING ---
+    public void LogGameState(string context)
+    {
+        StringBuilder sb = new StringBuilder();
+        sb.AppendLine($"<color=orange>=== GAME STATE ({context}) ===</color>");
+        
+        string heroName = activeHero != null ? activeHero.heroName : "None";
+        sb.AppendLine($"Hero: {heroName} | Turn: {turnNumber} | Phase: {currentPhase}");
+        sb.AppendLine($"HP: {playerHealth}/{maxPlayerHealth} | Gold: {gold}/{maxGold} | Unconscious: {isUnconscious}");
+        
+        sb.Append($"Board ({playerBoard.childCount}): ");
+        foreach(Transform child in playerBoard)
+        {
+            CardDisplay cd = child.GetComponent<CardDisplay>();
+            if (cd != null) 
+            {
+                // Format: Name CurAtk/CurHP (PermAtk/PermHP)
+                sb.Append($"[{cd.unitData.unitName} {cd.currentAttack}/{cd.currentHealth} ({cd.permanentAttack}/{cd.permanentHealth})] ");
+            }
+        }
+        sb.AppendLine();
+
+        sb.Append($"Hand ({playerHand.childCount}): ");
+        foreach(Transform child in playerHand)
+        {
+            CardDisplay cd = child.GetComponent<CardDisplay>();
+            if (cd != null) sb.Append($"[{cd.unitData.unitName}] ");
+        }
+        sb.AppendLine();
+
+        sb.AppendLine("============================");
+        Debug.Log(sb.ToString());
+    }
+
     void ApplyHeroBonuses()
     {
         if (activeHero == null) return;
@@ -81,6 +116,8 @@ public class GameManager : MonoBehaviour
 
         DeselectUnit();
         UpdateUI();
+        
+        LogGameState("Start Recruit");
     }
 
     public bool TrySpendGold(int amount)
@@ -108,10 +145,7 @@ public class GameManager : MonoBehaviour
             display.isPurchased = true; 
             
             if (AbilityManager.instance != null)
-            {
                 AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnPlay, display);
-                AbilityManager.instance.RecalculateAuras(); // Recalc on spawn
-            }
 
             CheckForTriples(data);
         }
@@ -129,13 +163,8 @@ public class GameManager : MonoBehaviour
             display.LoadUnit(data);
             display.isPurchased = true; 
             Destroy(newCard.GetComponent<UnityEngine.UI.Button>()); 
-            
-            // Recalc auras because a new unit appeared
-            if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
         }
     }
-
-    // --- NEW HAND LOGIC ---
 
     public bool TryBuyToHand(UnitData data, CardDisplay sourceCard)
     {
@@ -144,12 +173,13 @@ public class GameManager : MonoBehaviour
         if (playerHand.childCount >= 7)
         {
             Debug.Log("Hand is full!");
-            gold += data.cost; // Refund
+            gold += data.cost; 
             return false;
         }
 
         sourceCard.transform.SetParent(playerHand);
         sourceCard.isPurchased = true;
+        CheckForTriples(data); 
         return true;
     }
 
@@ -166,14 +196,12 @@ public class GameManager : MonoBehaviour
         if (AbilityManager.instance != null)
         {
             AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnPlay, card);
-            AbilityManager.instance.RecalculateAuras(); // Recalc on play
+            AbilityManager.instance.RecalculateAuras(); 
         }
 
         CheckForTriples(card.unitData);
         return true;
     }
-
-    // ----------------------
 
     public void SelectUnit(CardDisplay unit)
     {
@@ -191,12 +219,13 @@ public class GameManager : MonoBehaviour
     {
         if (unitToSell == null || currentPhase != GamePhase.Recruit) return;
 
+        Debug.Log($"Selling {unitToSell.unitData.unitName}");
         gold += 1;
         Destroy(unitToSell.gameObject);
         
         if (selectedUnit == unitToSell) DeselectUnit();
         
-        if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras(); // Recalc on sell
+        if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras(); 
         UpdateUI();
     }
 
@@ -210,30 +239,52 @@ public class GameManager : MonoBehaviour
         if (currentPhase != GamePhase.Recruit) return;
 
         List<CardDisplay> matches = new List<CardDisplay>();
+        List<Transform> searchZones = new List<Transform> { playerBoard, playerHand };
 
-        // Only check BOARD for triples, not hand
-        foreach(Transform child in playerBoard)
+        foreach (Transform zone in searchZones)
         {
-            CardDisplay card = child.GetComponent<CardDisplay>();
-            if (card != null && card.unitData == unitData && !card.isGolden)
+            foreach (Transform child in zone)
             {
-                matches.Add(card);
+                CardDisplay card = child.GetComponent<CardDisplay>();
+                if (card != null && card.unitData == unitData && !card.isGolden)
+                {
+                    matches.Add(card);
+                }
             }
         }
 
         if (matches.Count >= 3)
         {
-            Debug.Log("TRIPLE FOUND! Merging...");
-            foreach(CardDisplay card in matches) Destroy(card.gameObject);
+            Debug.Log($"TRIPLE FOUND for {unitData.unitName}! Merging...");
+            
+            int totalBonusAttack = 0;
+            int totalBonusHealth = 0;
 
-            GameObject goldenObj = Instantiate(cardPrefab, playerBoard);
+            for(int i=0; i<3; i++)
+            {
+                CardDisplay c = matches[i];
+                int atkBonus = c.permanentAttack - c.unitData.baseAttack;
+                int hpBonus = c.permanentHealth - c.unitData.baseHealth;
+                totalBonusAttack += atkBonus;
+                totalBonusHealth += hpBonus;
+                Destroy(c.gameObject);
+            }
+
+            Transform spawnTarget = playerHand.childCount < 7 ? playerHand : playerBoard;
+            GameObject goldenObj = Instantiate(cardPrefab, spawnTarget);
             CardDisplay goldenDisplay = goldenObj.GetComponent<CardDisplay>();
             
             goldenDisplay.LoadUnit(unitData);
             goldenDisplay.isPurchased = true;
             goldenDisplay.MakeGolden(); 
+
+            goldenDisplay.permanentAttack += totalBonusAttack;
+            goldenDisplay.permanentHealth += totalBonusHealth;
             
-            if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras(); // Recalc on merge
+            goldenDisplay.ResetToPermanent();
+            goldenDisplay.UpdateVisuals();
+            
+            if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
         }
     }
 
