@@ -9,11 +9,25 @@ public class AbilityManager : MonoBehaviour
 
     public void TriggerAbilities(AbilityTrigger trigger, CardDisplay sourceCard)
     {
-        if (sourceCard == null || sourceCard.unitData == null) return;
+        // 1. Safety Check: Source Validity
+        if (sourceCard == null) 
+        {
+            Debug.LogWarning("AbilityManager: Source Card is null!");
+            return;
+        }
+        
+        if (sourceCard.unitData == null)
+        {
+            Debug.LogWarning($"AbilityManager: UnitData missing on {sourceCard.gameObject.name}");
+            return;
+        }
+
+        // 2. Safety Check: Abilities List
+        if (sourceCard.unitData.abilities == null) return;
 
         foreach (AbilityData ability in sourceCard.unitData.abilities)
         {
-            if (ability.triggerType == trigger)
+            if (ability != null && ability.triggerType == trigger)
             {
                 ExecuteAbility(ability, sourceCard);
             }
@@ -26,9 +40,17 @@ public class AbilityManager : MonoBehaviour
 
         List<CardDisplay> targets = FindTargets(ability, source);
 
-        foreach (CardDisplay target in targets)
+        // Even if no targets found (e.g. Summon doesn't need targets), run effect if target is Self/None
+        if (targets.Count == 0 && (ability.targetType == AbilityTarget.Self || ability.effectType == AbilityEffect.SummonUnit))
         {
-            ApplyEffect(ability, target, source);
+            ApplyEffect(ability, source, source); // Use source as target for self-effects
+        }
+        else
+        {
+            foreach (CardDisplay target in targets)
+            {
+                ApplyEffect(ability, target, source);
+            }
         }
     }
 
@@ -46,28 +68,42 @@ public class AbilityManager : MonoBehaviour
                 break;
 
             case AbilityEffect.SummonUnit:
-                // FIX: Spawn on the specific board the source unit is on
-                Transform parentBoard = source.transform.parent;
-
+                // Safety Check: Token Unit
                 if (ability.tokenUnit == null)
                 {
-                    Debug.LogError("Ability Error: Token Unit is missing in the Ability Data!");
+                    Debug.LogError($"ABILITY ERROR: '{ability.name}' has no Token Unit assigned!");
                     return;
                 }
 
-                if (parentBoard != null)
+                // Safety Check: Board
+                if (source.transform.parent == null)
+                {
+                    Debug.LogError($"ABILITY ERROR: '{source.name}' has no parent board!");
+                    return;
+                }
+
+                Transform parentBoard = source.transform.parent;
+                
+                // Safety Check: GameManager
+                if (GameManager.instance != null)
                 {
                     GameManager.instance.SpawnToken(ability.tokenUnit, parentBoard);
                 }
                 break;
 
             case AbilityEffect.GainGold:
-                GameManager.instance.gold += ability.valueX;
-                GameManager.instance.UpdateUI();
+                if (GameManager.instance != null)
+                {
+                    GameManager.instance.gold += ability.valueX;
+                    GameManager.instance.UpdateUI();
+                }
                 break;
-
+                
             case AbilityEffect.HealHero:
-                GameManager.instance.ModifyHealth(ability.valueX);
+                if (GameManager.instance != null)
+                {
+                    GameManager.instance.ModifyHealth(ability.valueX);
+                }
                 break;
         }
     }
@@ -75,14 +111,16 @@ public class AbilityManager : MonoBehaviour
     List<CardDisplay> FindTargets(AbilityData ability, CardDisplay source)
     {
         List<CardDisplay> targets = new List<CardDisplay>();
+        
+        if (source.transform.parent == null) return targets;
         Transform board = source.transform.parent;
-        if (board == null) return targets;
 
         List<CardDisplay> allies = new List<CardDisplay>();
-        foreach (Transform child in board)
+        foreach(Transform child in board)
         {
             CardDisplay cd = child.GetComponent<CardDisplay>();
-            if (cd != null && cd != source && cd.gameObject.activeSelf) allies.Add(cd);
+            // Strict active check to ignore ghosts
+            if(cd != null && cd != source && cd.gameObject.activeInHierarchy) allies.Add(cd);
         }
 
         switch (ability.targetType)
@@ -92,7 +130,10 @@ public class AbilityManager : MonoBehaviour
                 break;
 
             case AbilityTarget.RandomFriendly:
-                if (allies.Count > 0) targets.Add(allies[Random.Range(0, allies.Count)]);
+                if (allies.Count > 0)
+                {
+                    targets.Add(allies[Random.Range(0, allies.Count)]);
+                }
                 break;
 
             case AbilityTarget.AllFriendly:

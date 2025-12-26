@@ -1,9 +1,9 @@
 using UnityEngine;
 using System.Collections.Generic;
 
-public enum Tribe
-{
-    None, Human, Undead, Beast, Dragon, Construct, Elemental
+public enum Tribe 
+{ 
+    None, Human, Undead, Beast, Dragon, Construct, Elemental 
 }
 
 [CreateAssetMenu(fileName = "New Unit", menuName = "DnD Battler/Unit Data")]
@@ -19,15 +19,16 @@ public class UnitData : ScriptableObject
     public int cost = 3;
     public int baseAttack;
     public int baseHealth;
-
+    
     [Header("Flavor")]
     public Tribe tribe;
-
+    
     [Header("New Ability System")]
-    public List<AbilityData> abilities;
+    // Initialize with empty list to prevent NullReferenceException
+    public List<AbilityData> abilities = new List<AbilityData>(); 
 
     [Header("Visuals")]
-    public Sprite artwork;
+    public Sprite artwork; 
     public Color frameColor = Color.gray;
-    public GameObject unitModelPrefab;
+    public GameObject unitModelPrefab; 
 }

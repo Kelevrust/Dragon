@@ -147,7 +147,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
                 Transform boardTransform = GameManager.instance.playerBoard;
 
                 // A. Buying from Shop
-                if (!isPurchased)
+                if (!isPurchased) 
                 {
                     if (GameManager.instance.gold >= unitData.cost)
                     {
@@ -155,6 +155,11 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
                         {
                             transform.SetParent(boardTransform);
                             isPurchased = true;
+                            
+                            // NEW: Trigger Battlecry on Drag Buy
+                            if (AbilityManager.instance != null)
+                                AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnPlay, this);
+
                             GameManager.instance.CheckForTriples(unitData);
                             actionHandled = true;
                         }
@@ -208,7 +213,12 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
                         if (playerBoard != null)
                         {
                             transform.SetParent(playerBoard.transform);
-                            isPurchased = true;
+                            isPurchased = true; 
+                            
+                            // NEW: Trigger Battlecry on Click Buy
+                            if (AbilityManager.instance != null)
+                                AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnPlay, this);
+
                             GameManager.instance.CheckForTriples(unitData);
                         }
                     }

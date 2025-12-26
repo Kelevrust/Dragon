@@ -1,5 +1,5 @@
 using UnityEngine;
-using TMPro;
+using TMPro; 
 using System.Collections.Generic;
 
 public class GameManager : MonoBehaviour
@@ -7,15 +7,15 @@ public class GameManager : MonoBehaviour
     public static GameManager instance;
 
     [Header("Hero Settings")]
-    public HeroData activeHero;
-    public Transform playerBoard;
-    public GameObject cardPrefab;
+    public HeroData activeHero; 
+    public Transform playerBoard; 
+    public GameObject cardPrefab; 
 
     [Header("Resources")]
     public int gold = 0;
     public int maxGold = 3;
     public int turnNumber = 1;
-
+    
     [Header("Player Stats")]
     public int playerHealth = 30;
     public int maxPlayerHealth = 30;
@@ -24,12 +24,12 @@ public class GameManager : MonoBehaviour
     [Header("UI References")]
     public TMP_Text goldText;
     public TMP_Text turnText;
-    public TMP_Text healthText;
-    public TMP_Text heroText;
-
+    public TMP_Text healthText; 
+    public TMP_Text heroText;   
+    
     [Header("Selection")]
-    public CardDisplay selectedUnit;
-    public GameObject sellButton;
+    public CardDisplay selectedUnit; 
+    public GameObject sellButton; 
 
     public enum GamePhase { Recruit, Combat }
     public GamePhase currentPhase;
@@ -70,8 +70,8 @@ public class GameManager : MonoBehaviour
         maxGold = Mathf.Min(3 + turnNumber, 10);
         gold = maxGold;
 
-        if (activeHero != null &&
-            activeHero.bonusType == HeroBonusType.ExtraGold &&
+        if (activeHero != null && 
+            activeHero.bonusType == HeroBonusType.ExtraGold && 
             turnNumber == 1)
         {
             gold += activeHero.bonusValue;
@@ -97,33 +97,40 @@ public class GameManager : MonoBehaviour
     // Used for Buying / Starting Unit (Uses PlayerBoard)
     public void SpawnUnitOnBoard(UnitData data)
     {
-        if (playerBoard == null || cardPrefab == null || data == null) return;
+        if (playerBoard == null || cardPrefab == null) return;
 
         GameObject newCard = Instantiate(cardPrefab, playerBoard);
         CardDisplay display = newCard.GetComponent<CardDisplay>();
         if (display != null)
         {
             display.LoadUnit(data);
-            display.isPurchased = true;
+            display.isPurchased = true; 
+            
+            // NEW: Trigger "OnPlay" abilities (Battlecries)
+            if (AbilityManager.instance != null)
+            {
+                AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnPlay, display);
+            }
+
             CheckForTriples(data);
         }
     }
 
-    // NEW: Used for Abilities/Summons (Specific Parent, No Triple Check)
+    // Used for Abilities/Summons (Specific Parent, No Triple Check)
     public void SpawnToken(UnitData data, Transform parent)
     {
         if (cardPrefab == null || data == null || parent == null) return;
 
         GameObject newCard = Instantiate(cardPrefab, parent);
         CardDisplay display = newCard.GetComponent<CardDisplay>();
-
+        
         if (display != null)
         {
             display.LoadUnit(data);
             display.isPurchased = true; // Tokens are owned
-
+            
             // Disable interaction components so tokens can't be clicked/dragged in combat
-            Destroy(newCard.GetComponent<UnityEngine.UI.Button>());
+            Destroy(newCard.GetComponent<UnityEngine.UI.Button>()); 
         }
     }
 
@@ -146,7 +153,7 @@ public class GameManager : MonoBehaviour
         Debug.Log($"Selling {unitToSell.unitData.unitName}");
         gold += 1;
         Destroy(unitToSell.gameObject);
-
+        
         if (selectedUnit == unitToSell) DeselectUnit();
         UpdateUI();
     }
@@ -162,7 +169,7 @@ public class GameManager : MonoBehaviour
 
         List<CardDisplay> matches = new List<CardDisplay>();
 
-        foreach (Transform child in playerBoard)
+        foreach(Transform child in playerBoard)
         {
             CardDisplay card = child.GetComponent<CardDisplay>();
             if (card != null && card.unitData == unitData && !card.isGolden)
@@ -174,14 +181,14 @@ public class GameManager : MonoBehaviour
         if (matches.Count >= 3)
         {
             Debug.Log("TRIPLE FOUND! Merging...");
-            foreach (CardDisplay card in matches) Destroy(card.gameObject);
+            foreach(CardDisplay card in matches) Destroy(card.gameObject);
 
             GameObject goldenObj = Instantiate(cardPrefab, playerBoard);
             CardDisplay goldenDisplay = goldenObj.GetComponent<CardDisplay>();
-
+            
             goldenDisplay.LoadUnit(unitData);
             goldenDisplay.isPurchased = true;
-            goldenDisplay.MakeGolden();
+            goldenDisplay.MakeGolden(); 
         }
     }
 
@@ -196,7 +203,7 @@ public class GameManager : MonoBehaviour
     {
         if (goldText != null) goldText.text = $"Gold: {gold}/{maxGold}";
         if (turnText != null) turnText.text = $"Turn: {turnNumber}";
-        if (healthText != null)
+        if (healthText != null) 
         {
             healthText.text = $"HP: {playerHealth}/{maxPlayerHealth}";
             if (isUnconscious) healthText.text += " (DOWN)";

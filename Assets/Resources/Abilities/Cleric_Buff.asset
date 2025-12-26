@@ -10,12 +10,12 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f939aad67108ef74b9bc26b9d4d97274, type: 3}
-  m_Name: Skeleton_Spawn
+  m_Name: Cleric_Buff
   m_EditorClassIdentifier: Assembly-CSharp::AbilityData
-  triggerType: 1
-  targetType: 0
-  effectType: 1
-  valueX: 0
-  valueY: 0
-  tokenUnit: {fileID: 11400000, guid: 3b69d9879dc1148409d8b35f610163fe, type: 2}
+  triggerType: 0
+  targetType: 2
+  effectType: 0
+  valueX: 1
+  valueY: 1
+  tokenUnit: {fileID: 0}
   vfxPrefab: {fileID: 0}
