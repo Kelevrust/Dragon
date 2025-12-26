@@ -12,7 +12,9 @@ public class UnitData : ScriptableObject
     [Header("Core Info")]
     public string id;
     public string unitName;
-    [TextArea] public string description;
+    
+    // NEW: CardDisplay looks for this exact name
+    [TextArea] public string description; 
 
     [Header("Stats")]
     [Range(1, 6)] public int tier = 1;
@@ -24,7 +26,6 @@ public class UnitData : ScriptableObject
     public Tribe tribe;
     
     [Header("New Ability System")]
-    // Initialize with empty list to prevent NullReferenceException
     public List<AbilityData> abilities = new List<AbilityData>(); 
 
     [Header("Visuals")]

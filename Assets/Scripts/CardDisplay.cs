@@ -1,13 +1,13 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
-using UnityEngine.EventSystems;
+using UnityEngine.EventSystems; 
 using System.Collections.Generic;
 
 public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandler, IDragHandler, IEndDragHandler
 {
     public UnitData unitData;
-
+    
     [Header("UI References")]
     public Image artworkImage;
     public TMP_Text nameText;
@@ -17,11 +17,21 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     public Image frameImage;
 
     [Header("State")]
-    public bool isPurchased = false;
+    public bool isPurchased = false; 
     public bool isGolden = false;
 
+    // Stats
+    public int permanentAttack;
+    public int permanentHealth;
     public int currentAttack;
     public int currentHealth;
+    
+    public int damageTaken = 0;
+
+    // Visual State
+    private Color originalAttackColor = Color.black; // Default fallback
+    private Color originalHealthColor = Color.black;
+    private bool colorsInitialized = false;
 
     // Drag State
     private Transform originalParent;
@@ -31,53 +41,109 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
 
     void Start()
     {
+        InitializeColors(); // Ensure we capture colors before modifying them
+        
         if (unitData != null && !isGolden) LoadUnit(unitData);
-
+        
         canvasGroup = GetComponent<CanvasGroup>();
         if (canvasGroup == null) canvasGroup = gameObject.AddComponent<CanvasGroup>();
-
+        
         Canvas canvas = GetComponentInParent<Canvas>();
         if (canvas != null) canvasTransform = canvas.transform;
     }
 
+    void InitializeColors()
+    {
+        if (colorsInitialized) return;
+        
+        if (attackText != null) originalAttackColor = attackText.color;
+        if (healthText != null) originalHealthColor = healthText.color;
+        
+        colorsInitialized = true;
+    }
+
     public void LoadUnit(UnitData data)
     {
+        InitializeColors(); // Capture colors if LoadUnit is called before Start
         unitData = data;
-        currentAttack = data.baseAttack;
-        currentHealth = data.baseHealth;
+        
+        // Initialize permanent stats from base
+        permanentAttack = data.baseAttack;
+        permanentHealth = data.baseHealth;
+        damageTaken = 0;
+        
+        ResetToPermanent();
         UpdateVisuals();
+    }
+
+    public void ResetToPermanent()
+    {
+        currentAttack = permanentAttack;
+        currentHealth = permanentHealth - damageTaken;
     }
 
     public void MakeGolden()
     {
         isGolden = true;
-        currentAttack = unitData.baseAttack * 2;
-        currentHealth = unitData.baseHealth * 2;
+        permanentAttack = unitData.baseAttack * 2;
+        permanentHealth = unitData.baseHealth * 2;
+        ResetToPermanent();
+        UpdateVisuals();
+    }
+
+    public void TakeDamage(int amount)
+    {
+        damageTaken += amount;
+        ResetToPermanent();
         UpdateVisuals();
     }
 
     public void UpdateVisuals()
     {
+        if (unitData == null) return;
+
         if (nameText != null) nameText.text = isGolden ? "Golden " + unitData.unitName : unitData.unitName;
-
-        // FIXED: Changed from abilityDescription to description to match new UnitData structure
         if (descriptionText != null) descriptionText.text = unitData.description;
-
         if (artworkImage != null) artworkImage.sprite = unitData.artwork;
+        
+        // Helper: Calculate what the "Base" is (taking Golden into account)
+        int baseAtk = isGolden ? unitData.baseAttack * 2 : unitData.baseAttack;
+        int baseHp = isGolden ? unitData.baseHealth * 2 : unitData.baseHealth;
 
-        if (attackText != null)
+        if (attackText != null) 
         {
             attackText.text = currentAttack.ToString();
-            attackText.color = isGolden ? Color.green : Color.black;
+            
+            // Logic: Green if Buffed (Current > Base), Red if Debuffed (Current < Base), Original otherwise
+            if (currentAttack > baseAtk) attackText.color = Color.green;
+            else if (currentAttack < baseAtk) attackText.color = Color.red;
+            else attackText.color = originalAttackColor; 
         }
-
-        if (healthText != null)
+        
+        if (healthText != null) 
         {
             healthText.text = currentHealth.ToString();
-            healthText.color = isGolden ? Color.green : Color.black;
+            
+            // Logic: 
+            // 1. Red if Damaged (Current < Permanent Max) -> Damage takes priority visualization
+            // 2. Green if Buffed (Current > Base) AND NOT Damaged
+            // 3. Original otherwise
+            
+            if (currentHealth < permanentHealth) 
+            {
+                healthText.color = Color.red;
+            }
+            else if (currentHealth > baseHp) 
+            {
+                healthText.color = Color.green;
+            }
+            else 
+            {
+                healthText.color = originalHealthColor;
+            }
         }
-
-        if (frameImage != null)
+        
+        if (frameImage != null) 
         {
             frameImage.color = isGolden ? new Color(1f, 0.8f, 0.2f) : unitData.frameColor;
         }
@@ -87,21 +153,24 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
 
     public void OnBeginDrag(PointerEventData eventData)
     {
-        if (GameManager.instance.currentPhase != GameManager.GamePhase.Recruit || GameManager.instance.isUnconscious)
+        if (GameManager.instance.currentPhase != GameManager.GamePhase.Recruit || GameManager.instance.isUnconscious) 
             return;
 
         originalParent = transform.parent;
         originalIndex = transform.GetSiblingIndex();
-
+        
         if (canvasTransform != null) transform.SetParent(canvasTransform);
         canvasGroup.blocksRaycasts = false;
+        
+        // Recalc when lifting (removing aura source)
+        if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
     }
 
     public void OnDrag(PointerEventData eventData)
     {
-        if (GameManager.instance.currentPhase != GameManager.GamePhase.Recruit || GameManager.instance.isUnconscious)
+        if (GameManager.instance.currentPhase != GameManager.GamePhase.Recruit || GameManager.instance.isUnconscious) 
             return;
-
+            
         transform.position = eventData.position;
     }
 
@@ -109,7 +178,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     {
         canvasGroup.blocksRaycasts = true;
 
-        if (GameManager.instance.currentPhase != GameManager.GamePhase.Recruit || GameManager.instance.isUnconscious)
+        if (GameManager.instance.currentPhase != GameManager.GamePhase.Recruit || GameManager.instance.isUnconscious) 
         {
             ReturnToStart();
             return;
@@ -124,8 +193,8 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         {
             GameObject hitObject = result.gameObject;
 
-            // Case 1: Sell Button
-            if (hitObject.name.Contains("SellButton"))
+            // 1. Sell Button
+            if (hitObject.name.Contains("SellButton")) 
             {
                 if (isPurchased)
                 {
@@ -134,67 +203,68 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
                     break;
                 }
             }
-
-            // Case 2: Player Board (Buying OR Reordering)
-            bool hitBoard = hitObject.name == "PlayerBoard";
-            if (!hitBoard && hitObject.transform.parent != null)
+            
+            // 2. Player Hand (Buying)
+            bool hitHand = hitObject.name == "PlayerHand" || (hitObject.transform.parent != null && hitObject.transform.parent.name == "PlayerHand");
+            
+            if (hitHand)
             {
-                hitBoard = hitObject.transform.parent.name == "PlayerBoard";
+                if (!isPurchased) 
+                {
+                    if (GameManager.instance.TryBuyToHand(unitData, this)) actionHandled = true;
+                }
+                else 
+                {
+                    transform.SetParent(GameManager.instance.playerHand);
+                    actionHandled = true;
+                }
+                if (actionHandled) break;
             }
 
-            if (hitBoard)
+            // 3. Player Board (Playing or Rearranging)
+            bool hitBoard = hitObject.name == "PlayerBoard" || (hitObject.transform.parent != null && hitObject.transform.parent.name == "PlayerBoard");
+
+            if (hitBoard && isPurchased)
             {
                 Transform boardTransform = GameManager.instance.playerBoard;
 
-                // A. Buying from Shop
-                if (!isPurchased) 
+                if (originalParent == GameManager.instance.playerHand)
                 {
-                    if (GameManager.instance.gold >= unitData.cost)
-                    {
-                        if (GameManager.instance.TrySpendGold(unitData.cost))
-                        {
-                            transform.SetParent(boardTransform);
-                            isPurchased = true;
-                            
-                            // NEW: Trigger Battlecry on Drag Buy
-                            if (AbilityManager.instance != null)
-                                AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnPlay, this);
-
-                            GameManager.instance.CheckForTriples(unitData);
-                            actionHandled = true;
-                        }
-                    }
+                    if (GameManager.instance.TryPlayCardToBoard(this)) actionHandled = true;
                 }
-                // B. Reordering Board
-                else
+                else if (originalParent == boardTransform)
                 {
                     transform.SetParent(boardTransform);
                     int newIndex = 0;
-                    foreach (Transform child in boardTransform)
+                    foreach(Transform child in boardTransform)
                     {
-                        if (child == transform) continue;
+                        if (child == transform) continue; 
                         if (transform.position.x > child.position.x) newIndex++;
                     }
                     transform.SetSiblingIndex(newIndex);
                     actionHandled = true;
                 }
-                break;
+                if (actionHandled) break;
             }
         }
 
         if (!actionHandled) ReturnToStart();
+        
+        // Recalc on drop (applying aura source)
+        if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
     }
 
     void ReturnToStart()
     {
         transform.SetParent(originalParent);
         transform.SetSiblingIndex(originalIndex);
+        if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
     }
 
     // --- CLICK LOGIC ---
     public void OnPointerClick(PointerEventData eventData)
     {
-        if (eventData.dragging) return;
+        if (eventData.dragging) return; 
 
         if (GameManager.instance.currentPhase != GameManager.GamePhase.Recruit) return;
         if (GameManager.instance.isUnconscious) return;
@@ -204,31 +274,21 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
             // Only buy on Double Click
             if (eventData.clickCount >= 2)
             {
-                int cost = unitData.cost;
-                if (GameManager.instance.gold >= cost)
-                {
-                    if (GameManager.instance.TrySpendGold(cost))
-                    {
-                        GameObject playerBoard = GameObject.Find("PlayerBoard");
-                        if (playerBoard != null)
-                        {
-                            transform.SetParent(playerBoard.transform);
-                            isPurchased = true; 
-                            
-                            // NEW: Trigger Battlecry on Click Buy
-                            if (AbilityManager.instance != null)
-                                AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnPlay, this);
-
-                            GameManager.instance.CheckForTriples(unitData);
-                        }
-                    }
-                }
+                GameManager.instance.TryBuyToHand(unitData, this);
             }
         }
         else
         {
-            // Single click selects owned units
-            GameManager.instance.SelectUnit(this);
+            // If in Hand, Double Click -> Play to Board
+            if (eventData.clickCount >= 2 && transform.parent == GameManager.instance.playerHand)
+            {
+                GameManager.instance.TryPlayCardToBoard(this);
+            }
+            // Else just select
+            else
+            {
+                GameManager.instance.SelectUnit(this);
+            }
         }
     }
 }

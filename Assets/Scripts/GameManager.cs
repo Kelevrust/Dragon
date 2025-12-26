@@ -1,6 +1,7 @@
 using UnityEngine;
-using TMPro; 
+using TMPro; // This is required for TMP_Text
 using System.Collections.Generic;
+using UnityEngine.UI; // Sometimes needed if standard UI elements are referenced
 
 public class GameManager : MonoBehaviour
 {
@@ -9,6 +10,7 @@ public class GameManager : MonoBehaviour
     [Header("Hero Settings")]
     public HeroData activeHero; 
     public Transform playerBoard; 
+    public Transform playerHand; // NEW: Critical for CardDisplay
     public GameObject cardPrefab; 
 
     [Header("Resources")]
@@ -94,7 +96,6 @@ public class GameManager : MonoBehaviour
         return false;
     }
 
-    // Used for Buying / Starting Unit (Uses PlayerBoard)
     public void SpawnUnitOnBoard(UnitData data)
     {
         if (playerBoard == null || cardPrefab == null) return;
@@ -106,17 +107,16 @@ public class GameManager : MonoBehaviour
             display.LoadUnit(data);
             display.isPurchased = true; 
             
-            // NEW: Trigger "OnPlay" abilities (Battlecries)
             if (AbilityManager.instance != null)
             {
                 AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnPlay, display);
+                AbilityManager.instance.RecalculateAuras(); // Recalc on spawn
             }
 
             CheckForTriples(data);
         }
     }
 
-    // Used for Abilities/Summons (Specific Parent, No Triple Check)
     public void SpawnToken(UnitData data, Transform parent)
     {
         if (cardPrefab == null || data == null || parent == null) return;
@@ -127,12 +127,53 @@ public class GameManager : MonoBehaviour
         if (display != null)
         {
             display.LoadUnit(data);
-            display.isPurchased = true; // Tokens are owned
-            
-            // Disable interaction components so tokens can't be clicked/dragged in combat
+            display.isPurchased = true; 
             Destroy(newCard.GetComponent<UnityEngine.UI.Button>()); 
+            
+            // Recalc auras because a new unit appeared
+            if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
         }
     }
+
+    // --- NEW HAND LOGIC ---
+
+    public bool TryBuyToHand(UnitData data, CardDisplay sourceCard)
+    {
+        if (!TrySpendGold(data.cost)) return false;
+
+        if (playerHand.childCount >= 7)
+        {
+            Debug.Log("Hand is full!");
+            gold += data.cost; // Refund
+            return false;
+        }
+
+        sourceCard.transform.SetParent(playerHand);
+        sourceCard.isPurchased = true;
+        return true;
+    }
+
+    public bool TryPlayCardToBoard(CardDisplay card)
+    {
+        if (playerBoard.childCount >= 7)
+        {
+            Debug.Log("Board is full!");
+            return false;
+        }
+
+        card.transform.SetParent(playerBoard);
+        
+        if (AbilityManager.instance != null)
+        {
+            AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnPlay, card);
+            AbilityManager.instance.RecalculateAuras(); // Recalc on play
+        }
+
+        CheckForTriples(card.unitData);
+        return true;
+    }
+
+    // ----------------------
 
     public void SelectUnit(CardDisplay unit)
     {
@@ -150,11 +191,12 @@ public class GameManager : MonoBehaviour
     {
         if (unitToSell == null || currentPhase != GamePhase.Recruit) return;
 
-        Debug.Log($"Selling {unitToSell.unitData.unitName}");
         gold += 1;
         Destroy(unitToSell.gameObject);
         
         if (selectedUnit == unitToSell) DeselectUnit();
+        
+        if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras(); // Recalc on sell
         UpdateUI();
     }
 
@@ -169,6 +211,7 @@ public class GameManager : MonoBehaviour
 
         List<CardDisplay> matches = new List<CardDisplay>();
 
+        // Only check BOARD for triples, not hand
         foreach(Transform child in playerBoard)
         {
             CardDisplay card = child.GetComponent<CardDisplay>();
@@ -189,6 +232,8 @@ public class GameManager : MonoBehaviour
             goldenDisplay.LoadUnit(unitData);
             goldenDisplay.isPurchased = true;
             goldenDisplay.MakeGolden(); 
+            
+            if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras(); // Recalc on merge
         }
     }
 

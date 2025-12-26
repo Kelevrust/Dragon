@@ -9,20 +9,7 @@ public class AbilityManager : MonoBehaviour
 
     public void TriggerAbilities(AbilityTrigger trigger, CardDisplay sourceCard)
     {
-        // 1. Safety Check: Source Validity
-        if (sourceCard == null) 
-        {
-            Debug.LogWarning("AbilityManager: Source Card is null!");
-            return;
-        }
-        
-        if (sourceCard.unitData == null)
-        {
-            Debug.LogWarning($"AbilityManager: UnitData missing on {sourceCard.gameObject.name}");
-            return;
-        }
-
-        // 2. Safety Check: Abilities List
+        if (sourceCard == null || sourceCard.unitData == null) return;
         if (sourceCard.unitData.abilities == null) return;
 
         foreach (AbilityData ability in sourceCard.unitData.abilities)
@@ -34,16 +21,47 @@ public class AbilityManager : MonoBehaviour
         }
     }
 
+    // NEW: Called whenever the board state changes (Buy, Sell, Move, Die)
+    public void RecalculateAuras()
+    {
+        // 1. Find all active cards using the modern API
+        CardDisplay[] allCards = FindObjectsByType<CardDisplay>(FindObjectsSortMode.None);
+
+        // 2. Reset everyone to their "Real" stats (Base + Permanent Buffs)
+        foreach (CardDisplay card in allCards)
+        {
+            card.ResetToPermanent();
+        }
+
+        // 3. Apply Aura Effects
+        foreach (CardDisplay source in allCards)
+        {
+            if (!source.isPurchased) continue; // Shop items don't emit auras
+            if (source.unitData == null || source.unitData.abilities == null) continue;
+
+            foreach (AbilityData ability in source.unitData.abilities)
+            {
+                if (ability.triggerType == AbilityTrigger.PassiveAura)
+                {
+                    ExecuteAbility(ability, source);
+                }
+            }
+        }
+
+        // 4. Update UI
+        foreach (CardDisplay card in allCards)
+        {
+            card.UpdateVisuals();
+        }
+    }
+
     void ExecuteAbility(AbilityData ability, CardDisplay source)
     {
-        Debug.Log($"Executing Ability: {ability.name} from {source.unitData.unitName}");
-
         List<CardDisplay> targets = FindTargets(ability, source);
 
-        // Even if no targets found (e.g. Summon doesn't need targets), run effect if target is Self/None
         if (targets.Count == 0 && (ability.targetType == AbilityTarget.Self || ability.effectType == AbilityEffect.SummonUnit))
         {
-            ApplyEffect(ability, source, source); // Use source as target for self-effects
+            ApplyEffect(ability, source, source); 
         }
         else
         {
@@ -61,33 +79,43 @@ public class AbilityManager : MonoBehaviour
             case AbilityEffect.BuffStats:
                 if (target != null)
                 {
-                    target.currentAttack += ability.valueX;
-                    target.currentHealth += ability.valueY;
-                    target.UpdateVisuals();
+                    int atk = ability.valueX;
+                    int hp = ability.valueY;
+
+                    if (source.isGolden && ability.triggerType == AbilityTrigger.PassiveAura)
+                    {
+                        atk *= 2;
+                        hp *= 2;
+                    }
+
+                    // Auras modify CURRENT stats (temporary)
+                    if (ability.triggerType == AbilityTrigger.PassiveAura)
+                    {
+                        target.currentAttack += atk;
+                        target.currentHealth += hp;
+                    }
+                    // Battlecries/Deathrattles modify PERMANENT stats
+                    else
+                    {
+                        target.permanentAttack += atk;
+                        target.permanentHealth += hp;
+                        
+                        // Apply to current immediately too
+                        target.currentAttack += atk;
+                        target.currentHealth += hp;
+                        target.UpdateVisuals();
+                    }
                 }
                 break;
 
             case AbilityEffect.SummonUnit:
-                // Safety Check: Token Unit
-                if (ability.tokenUnit == null)
-                {
-                    Debug.LogError($"ABILITY ERROR: '{ability.name}' has no Token Unit assigned!");
-                    return;
-                }
-
-                // Safety Check: Board
-                if (source.transform.parent == null)
-                {
-                    Debug.LogError($"ABILITY ERROR: '{source.name}' has no parent board!");
-                    return;
-                }
-
-                Transform parentBoard = source.transform.parent;
+                if (ability.tokenUnit == null || source.transform.parent == null) return;
                 
-                // Safety Check: GameManager
                 if (GameManager.instance != null)
                 {
-                    GameManager.instance.SpawnToken(ability.tokenUnit, parentBoard);
+                    GameManager.instance.SpawnToken(ability.tokenUnit, source.transform.parent);
+                    // Recalculate auras after spawn
+                    RecalculateAuras();
                 }
                 break;
 
@@ -111,16 +139,15 @@ public class AbilityManager : MonoBehaviour
     List<CardDisplay> FindTargets(AbilityData ability, CardDisplay source)
     {
         List<CardDisplay> targets = new List<CardDisplay>();
-        
         if (source.transform.parent == null) return targets;
+        
         Transform board = source.transform.parent;
-
+        
         List<CardDisplay> allies = new List<CardDisplay>();
         foreach(Transform child in board)
         {
             CardDisplay cd = child.GetComponent<CardDisplay>();
-            // Strict active check to ignore ghosts
-            if(cd != null && cd != source && cd.gameObject.activeInHierarchy) allies.Add(cd);
+            if(cd != null && cd.gameObject.activeInHierarchy) allies.Add(cd);
         }
 
         switch (ability.targetType)
@@ -130,14 +157,20 @@ public class AbilityManager : MonoBehaviour
                 break;
 
             case AbilityTarget.RandomFriendly:
-                if (allies.Count > 0)
-                {
-                    targets.Add(allies[Random.Range(0, allies.Count)]);
-                }
+                List<CardDisplay> validRandom = new List<CardDisplay>(allies);
+                validRandom.Remove(source);
+                if (validRandom.Count > 0) targets.Add(validRandom[Random.Range(0, validRandom.Count)]);
                 break;
 
             case AbilityTarget.AllFriendly:
                 targets.AddRange(allies);
+                targets.Remove(source);
+                break;
+
+            case AbilityTarget.AdjacentFriendly:
+                int index = allies.IndexOf(source);
+                if (index > 0) targets.Add(allies[index - 1]); // Left
+                if (index < allies.Count - 1) targets.Add(allies[index + 1]); // Right
                 break;
         }
 

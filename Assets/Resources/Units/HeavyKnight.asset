@@ -10,18 +10,18 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 00e4fb7d95a6d1e4183f887e469ccdf6, type: 3}
-  m_Name: Dire Wolf
+  m_Name: HeavyKnight
   m_EditorClassIdentifier: Assembly-CSharp::UnitData
   id: 
-  unitName: Dire Wolf
+  unitName: Heavy Knight
   description: 
-  tier: 1
+  tier: 2
   cost: 3
-  baseAttack: 3
-  baseHealth: 3
-  tribe: 3
+  baseAttack: 4
+  baseHealth: 5
+  tribe: 1
   abilities:
-  - {fileID: 11400000, guid: 3f18c8ed4498682418ab0b5d38f24d5e, type: 2}
+  - {fileID: 11400000, guid: 2fb4186a50eb59348a3494659b6b88a2, type: 2}
   artwork: {fileID: 10913, guid: 0000000000000000f000000000000000, type: 0}
   frameColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   unitModelPrefab: {fileID: 0}
