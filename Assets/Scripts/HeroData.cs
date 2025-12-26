@@ -1,12 +1,8 @@
 using UnityEngine;
 
-// Defines what kind of bonus this hero provides
-public enum HeroBonusType
-{
-    None,
-    ExtraHealth, // Paladin (+5 Max HP)
-    ExtraGold,   // Ranger (+1 Gold on Turn 1)
-    StartingUnit // Necromancer (Starts with Skeleton)
+public enum HeroBonusType 
+{ 
+    None, ExtraHealth, ExtraGold, StartingUnit 
 }
 
 [CreateAssetMenu(fileName = "New Hero", menuName = "DnD Battler/Hero Data")]
@@ -17,13 +13,15 @@ public class HeroData : ScriptableObject
     [TextArea] public string description;
     public Sprite heroPortrait;
 
-    [Header("Mechanics")]
+    [Header("Passive Bonus")]
     public HeroBonusType bonusType;
-
-    // We use generic fields that change meaning based on bonusType
     [Tooltip("Amount of Gold or Health to add")]
-    public int bonusValue;
-
+    public int bonusValue; 
     [Tooltip("Only used if Bonus Type is StartingUnit")]
-    public UnitData startingUnit;
+    public UnitData startingUnit; 
+
+    [Header("Hero Power")]
+    public string powerName = "Hero Power";
+    public int powerCost = 2;
+    public AbilityData powerAbility; // Drag an AbilityData file here
 }

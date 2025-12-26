@@ -2,30 +2,44 @@ using UnityEngine;
 
 public enum AbilityTrigger
 {
-    OnPlay,         // Battlecry
-    OnDeath,        // Deathrattle
-    OnTurnStart,    // Passive scaling
-    OnDamageTaken,  // Enrage
-    PassiveAura     // Constant effect (Dire Wolf)
+    OnPlay,
+    OnDeath,
+    OnTurnStart,
+    OnDamageTaken,
+    PassiveAura,
+    OnHeroPower
 }
 
 public enum AbilityTarget
 {
+    None,               // NEW: Instant cast (no target selection needed)
     Self,
     RandomFriendly,
     AllFriendly,
     AdjacentFriendly,
     RandomEnemy,
-    LowestHealthFriendly
+    LowestHealthFriendly,
+    SelectTarget,       
+    AllFriendlyTribe,   
+    RandomFriendlyTribe 
 }
 
 public enum AbilityEffect
 {
-    BuffStats,      // Give +X/+X
-    SummonUnit,     // Spawn a specific token
-    DealDamage,     // Fireball/Snipe
-    HealHero,       // Restore Player HP
-    GainGold        // Economy boost
+    BuffStats,
+    SummonUnit,
+    DealDamage,
+    HealHero,
+    GainGold
+}
+
+// NEW: Where should the summoned unit go?
+public enum AbilitySpawnLocation
+{
+    BoardOnly,      // If board full, fail
+    HandOnly,       // Add to hand
+    BoardThenHand,  // Try board, fallback to hand (Standard Hero Power)
+    ReplaceTarget   // Destroy target, put new unit there (Polymorph/Sacrifice)
 }
 
 [CreateAssetMenu(fileName = "New Ability", menuName = "DnD Battler/Ability Data")]
@@ -36,16 +50,17 @@ public class AbilityData : ScriptableObject
     
     [Header("Targeting")]
     public AbilityTarget targetType;
+    public Tribe targetTribe; 
     
     [Header("Effect")]
     public AbilityEffect effectType;
-    public int valueX; // Attack buff, Damage amount, or Gold amount
-    public int valueY; // Health buff
+    public int valueX; 
+    public int valueY; 
     
-    [Header("Summoning (Optional)")]
-    [Tooltip("Only used if Effect is SummonUnit")]
+    [Header("Summoning")]
     public UnitData tokenUnit; 
+    public AbilitySpawnLocation spawnLocation; // NEW
     
     [Header("Visuals")]
-    public GameObject vfxPrefab; // Particle effect to play when triggered
+    public GameObject vfxPrefab; 
 }

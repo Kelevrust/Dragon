@@ -44,9 +44,6 @@ public class CombatManager : MonoBehaviour
     {
         if (GameManager.instance.currentPhase != GameManager.GamePhase.Recruit) return;
 
-        // LOG START
-        GameManager.instance.LogGameState("Pre-Combat");
-
         if (shopContainer != null) foreach (Transform child in shopContainer) Destroy(child.gameObject);
         
         SaveRoster();
@@ -57,10 +54,6 @@ public class CombatManager : MonoBehaviour
         
         StartCoroutine(CombatRoutine());
     }
-
-    // ... (Middle sections for SaveRoster, SpawnEnemies, CombatRoutine, AnimateAttack, GetUnits remain unchanged - skipping for brevity but they are implicitly included)
-    // IMPORTANT: When you paste, ensure you keep the full file content. 
-    // I will include the full file to be safe.
 
     void SaveRoster()
     {
@@ -106,6 +99,7 @@ public class CombatManager : MonoBehaviour
         List<CardDisplay> players = GetUnits(playerBoard);
         List<CardDisplay> enemies = GetUnits(enemyBoard);
 
+        // Track HP locally to handle death logic without modifying card data directly
         Dictionary<CardDisplay, int> combatHealths = new Dictionary<CardDisplay, int>();
         Dictionary<CardDisplay, int> combatAttacks = new Dictionary<CardDisplay, int>();
 
@@ -122,14 +116,13 @@ public class CombatManager : MonoBehaviour
 
         while (players.Count > 0 && enemies.Count > 0)
         {
-            players = GetUnits(playerBoard);
-            enemies = GetUnits(enemyBoard);
-            
+            // Safety check for empty lists
             if (players.Count == 0 || enemies.Count == 0) break;
 
             CardDisplay pUnit = players[0];
             CardDisplay eUnit = enemies[0];
 
+            // Register any new tokens spawned mid-combat
             if (!combatHealths.ContainsKey(pUnit)) 
             {
                 combatHealths[pUnit] = pUnit.currentHealth;
@@ -159,9 +152,14 @@ public class CombatManager : MonoBehaviour
             if (eDies) KillUnit(eUnit, enemies, true);
             if (pDies) KillUnit(pUnit, players, false);
 
+            // Re-fetch lists to ensure we are working with valid, active objects only
+            players = GetUnits(playerBoard);
+            enemies = GetUnits(enemyBoard);
+
             yield return new WaitForSeconds(combatPace);
         }
 
+        // Damage Calculation
         enemies = GetUnits(enemyBoard);
         players = GetUnits(playerBoard);
         int damageTaken = 0;
@@ -178,8 +176,11 @@ public class CombatManager : MonoBehaviour
     void UpdateCombatVisuals(CardDisplay unit, int currentHp)
     {
         if (unit.healthText == null) return;
+        
         unit.healthText.text = currentHp.ToString();
+        
         int maxHp = unit.isGolden ? unit.unitData.baseHealth * 2 : unit.unitData.baseHealth;
+
         if (currentHp < unit.permanentHealth) unit.healthText.color = Color.red;
         else if (currentHp > maxHp) unit.healthText.color = Color.green;
         else unit.healthText.color = Color.black;
@@ -187,6 +188,7 @@ public class CombatManager : MonoBehaviour
 
     void KillUnit(CardDisplay unit, List<CardDisplay> list, bool isEnemy)
     {
+        // 1. Trigger Abilities
         if (AbilityManager.instance != null)
         {
             try 
@@ -199,11 +201,13 @@ public class CombatManager : MonoBehaviour
             }
         }
 
-        list.Remove(unit);
+        // 2. Remove from logic list
+        if (list.Contains(unit)) list.Remove(unit);
 
+        // 3. NUCLEAR OPTION: Immediately hide and reparent
         if (graveyard != null) unit.transform.SetParent(graveyard);
-        unit.gameObject.SetActive(false);
-        Destroy(unit.gameObject);
+        unit.gameObject.SetActive(false); // Hide instantly
+        Destroy(unit.gameObject); // Queue destruction
     }
 
     IEnumerator AnimateAttack(Transform attacker, Transform target)
@@ -237,7 +241,8 @@ public class CombatManager : MonoBehaviour
         foreach(Transform child in board)
         {
             CardDisplay cd = child.GetComponent<CardDisplay>();
-            if(cd != null && cd.gameObject.activeSelf) list.Add(cd);
+            // Strict check: Must be active in hierarchy to count
+            if(cd != null && cd.gameObject.activeInHierarchy) list.Add(cd);
         }
         return list;
     }
@@ -246,7 +251,6 @@ public class CombatManager : MonoBehaviour
     {
         if (damageTaken > 0) GameManager.instance.ModifyHealth(-damageTaken);
 
-        // LOG END
         GameManager.instance.LogGameState($"Post-Combat (Damage: {damageTaken})");
 
         if (GameManager.instance.playerHealth <= 0) DeathSaveManager.instance.StartDeathSequence();
@@ -259,6 +263,7 @@ public class CombatManager : MonoBehaviour
     {
         yield return new WaitForSeconds(shopReturnDelay);
         
+        // Cleanup with extreme prejudice
         List<GameObject> toDestroy = new List<GameObject>();
         foreach (Transform child in enemyBoard) toDestroy.Add(child.gameObject);
         foreach (Transform child in playerBoard) toDestroy.Add(child.gameObject);
@@ -271,6 +276,7 @@ public class CombatManager : MonoBehaviour
 
         List<CardDisplay> spawnedCards = new List<CardDisplay>();
 
+        // Restore Units
         foreach (SavedUnit snap in savedPlayerRoster)
         {
             GameObject newCard = Instantiate(cardPrefab, playerBoard);
@@ -282,6 +288,7 @@ public class CombatManager : MonoBehaviour
             spawnedCards.Add(cd);
         }
 
+        // Wait for Start() to finish
         yield return null;
 
         for(int i=0; i<savedPlayerRoster.Count; i++)

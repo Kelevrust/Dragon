@@ -262,9 +262,19 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     }
 
     // --- CLICK LOGIC ---
+    // ... inside CardDisplay.cs ...
+
+    // --- CLICK LOGIC ---
     public void OnPointerClick(PointerEventData eventData)
     {
         if (eventData.dragging) return; 
+
+        // NEW: Check Targeting Mode First
+        if (GameManager.instance.isTargetingMode)
+        {
+            GameManager.instance.OnUnitClicked(this);
+            return;
+        }
 
         if (GameManager.instance.currentPhase != GameManager.GamePhase.Recruit) return;
         if (GameManager.instance.isUnconscious) return;
