@@ -1,12 +1,17 @@
-Battlegrounds
+Battlegrounds (Project Grimm)
 
-A strategic auto-battler card game combining the drafting mechanics of popular card battlers with the tactical depth and lore of popular TTRPGs. Built in Unity (Universal Render Pipeline).
+A strategic auto-battler card game combining the drafting mechanics of popular card battlers with the tactical depth of roguelite RPGs.
+
+Visual Identity: Neon Noir.
+Reference: The Wolf Among Us, Sin City, Cyberpunk Edgerunners.
+Palette: Deep blacks, hard outlines, neon accents (Cyan/Magenta).
+Setting: Modern urban decay overlaid with ancient folklore.
 
 Project Overview
 
 Engine: Unity 2022+ (LTS)
 Language: C#
-Platform: PC / Mobile (Cross-platform architecture)
+Platform: PC / Android (Initial Target)
 
 Development Roadmap
 
@@ -18,47 +23,56 @@ Phase 1: The Core Loop (Complete)
     [x] Damage Calculation (Hero takes damage)
     [x] Death Loop (Saving Throws & Unconscious State)
 
-Phase 1.5: Advanced Economy & Flow (Next Up)
+Phase 1.5: Advanced Economy & Flow (Complete)
 
-    [ ] Hand System: Buying a unit moves it to a "Hand" zone first. Drag from Hand to Board to play.
-    [ ] Tavern Refresh: Reroll the shop selection for 1 Gold.
-    [ ] Tavern Tier System:
-        [ ] Pay Gold to upgrade Tavern Tier.
-        [ ] Higher tiers unlock better units in the shop.
+    [x] Hand System: Buying a unit moves it to a "Hand" zone first. Drag from Hand to Board to play.
+    [x] Tavern Refresh: Reroll the shop selection for 1 Gold.
+    [x] Tavern Tier System:
+    [x] Pay Gold to upgrade Tavern Tier.
+    [x] Higher tiers unlock better units in the shop.
+    [x] Discount logic (Upgrade cost reduces by 1 per turn).
 
 Phase 2: The "Fun" (Mechanics)
 
     [x] Ability System Core: (Infrastructure Built)
     [x] Deathrattles (Token Spawning)
-    [ ] Battlecries (On Play Buffs)
-    [ ] Auras (Passive Buffs)
-    [ ] Hero Powers (Active Buttons)
-    [ ] Visual Polish (Impact particles, sound effects)
+    [x] Battlecries (On Play Buffs)
+    [x] Auras (Passive Buffs)
+    [x] Hero Powers (Active Buttons & Logic)
+    [ ] Visual Polish:
+    [ ] "Neon Noir" Shader/UI skinning.
+    [ ] Impact particles & sound effects.
 
-Phase 2.5: System Features & Polish (Backlog)
+Phase 2.5: System Features & Polish (Current Focus)
 
-    [ ] Settings Menu:
-        [ ] Resolution & Window Mode options.
-        [ ] Graphics Quality (Shadows, Texture Resolution).
-        [ ] Audio Mixer (Master, Music, SFX volume).
-        [ ] Drag & Drop Purchasing: Fix Raycast logic for direct buy/sell.
-        [ ] UI Scaling: Ensure text boxes handle large numbers/names gracefully.
+    [x] Unit Tooltips: Mouseover to see detailed stats, keywords, and buff sources.
+    [x] Settings Menu:
+    [x] Resolution & Window Mode options.
+    [x] Graphics Quality (Auto-Detect).
+    [x] Audio Mixer (Master, Music, SFX volume).
+    [ ] Passive Analytics: Integrate basic event tracking (Round End, Win/Loss, Economy).
+    [ ] Drag & Drop Purchasing: Fix Raycast logic for direct buy/sell.
 
 Phase 3: The Structure (PvP Framework)
 
+    Goal: Balanced, static stat blocks for competitive play.
     [ ] Lobby System (Simulated)
-    [ ] Create 7 "Bot" opponents with random names.
+    [ ] Create 7 "Bot" opponents with random names (Thematic: "The Woodsman", "Baba Yaga").
     [ ] Track HP for all 8 players on a scoreboard.
-    [ ] Matchmaking logic (Who fights whom?).
+    [ ] Matchmaking logic.
     [ ] Ghost Data
     [ ] Save player board state to JSON.
     [ ] Load enemy board state from JSON.
 
 Phase 4: The Content (PvE Modes)
 
-    [ ] Dungeon Run (Goal Oriented)
-    [ ] Map Screen / Node Selection.
-    [ ] Boss Encounters.
-    [ ] Endless Mode (Survival)
-    [ ] Difficulty Scaling Algorithm.
-    [ ] Reward intervals (Every 30 rounds).
+    Goal: Roguelite progression where stats can scale wildly.
+    [ ] Run Manager: Separate persistent "Run" stats vs Base "PvP" stats.
+    [ ] Dungeon Run (Goal Oriented).
+    [ ] Endless Mode (Survival).
+
+Phase 5: Monetization (Fair-to-Play)
+
+    [ ] Cosmetic Shop (Skins, Boards, Emotes).
+    [ ] Progression Acceleration.
+    [ ] Content Packs.

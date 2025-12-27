@@ -12,9 +12,7 @@ public class ShopManager : MonoBehaviour
 
     [Header("Tavern Tech")]
     public int tavernTier = 1;
-    // Costs to reach next tier: Tier 1->2 (5g), 2->3 (7g), 3->4 (8g), 4->5 (9g), 5->6 (10g)
-    // Index 0 and 1 are unused or 0 since we start at Tier 1.
-    // We look up cost for NEXT tier. e.g. upgrading to Tier 2 uses index 2.
+    // Costs to reach: Tier 1 (0), Tier 2 (5), Tier 3 (7), Tier 4 (8), Tier 5 (9), Tier 6 (10)
     public int[] tierCosts = new int[] { 0, 0, 5, 7, 8, 9, 10 }; 
     public int maxTier = 6;
     
@@ -58,6 +56,11 @@ public class ShopManager : MonoBehaviour
         if (GameManager.instance.TrySpendGold(rerollCost))
         {
             GameManager.instance.LogAction("Rerolled Shop");
+            
+            // ANALYTICS: Track Reroll
+            if (AnalyticsManager.instance != null) 
+                AnalyticsManager.instance.TrackReroll(tavernTier);
+
             ClearShop();
             GenerateCards();
         }

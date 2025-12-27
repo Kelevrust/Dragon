@@ -56,8 +56,15 @@ public class GameManager : MonoBehaviour
     {
         ApplyHeroBonuses();
         StartRecruitPhase();
+        
+        // ANALYTICS: Track Game Start
+        if (AnalyticsManager.instance != null && activeHero != null)
+        {
+            AnalyticsManager.instance.TrackGameStart(activeHero.heroName);
+        }
     }
 
+    // ... (Update, LogAction, LogGameState remain same) ...
     void Update()
     {
         if (isTargetingMode)
@@ -110,6 +117,7 @@ public class GameManager : MonoBehaviour
         Debug.Log(sb.ToString());
     }
 
+    // ... (ApplyHeroBonuses, StartRecruitPhase remain same) ...
     void ApplyHeroBonuses()
     {
         if (activeHero == null) return;
@@ -172,7 +180,6 @@ public class GameManager : MonoBehaviour
             display.LoadUnit(data);
             display.isPurchased = true; 
             
-            // OnPlay triggers here for auto-spawns at start of game
             if (AbilityManager.instance != null)
                 AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnPlay, display);
 
@@ -194,7 +201,6 @@ public class GameManager : MonoBehaviour
         switch (location)
         {
             case AbilitySpawnLocation.BoardOnly:
-                // Check specific parent first (e.g. Enemy Board)
                 if (specificTargetParent != null)
                 {
                     if (specificTargetParent.childCount < 7) 
@@ -202,7 +208,6 @@ public class GameManager : MonoBehaviour
                 }
                 else
                 {
-                    // Default to player board
                     if (playerBoard.childCount < 7) 
                         targetParent = playerBoard;
                 }
@@ -234,30 +239,23 @@ public class GameManager : MonoBehaviour
         if (display != null)
         {
             display.LoadUnit(data);
-            display.isPurchased = true; // Tokens are owned
+            display.isPurchased = true; 
             
-            // Only trigger OnPlay if it's the Player's board AND we are in Recruit Phase
-            // This prevents Battlecries from firing for tokens spawned during Combat
             if (targetParent == playerBoard)
             {
                 if (currentPhase == GamePhase.Recruit)
                 {
                     if (AbilityManager.instance != null)
-                    {
                         AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnPlay, display);
-                    }
                 }
                 
-                // Always recalc Auras for new units (visuals)
                 if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
             }
             else if (targetParent != playerHand)
             {
-                 // Ensure visual refresh for Enemy/Other boards
                  if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
             }
             
-            // Don't merge triples during combat
             if (currentPhase == GamePhase.Recruit)
                 CheckForTriples(data);
             
@@ -266,33 +264,21 @@ public class GameManager : MonoBehaviour
         return false;
     }
 
+    // --- TARGETING (Keep Existing) ---
     public void StartAbilityTargeting(AbilityData ability)
     {
         if (ability == null) return;
-
         isTargetingMode = true;
         pendingAbility = ability;
-        
         Debug.Log($"<color=cyan>Select a target for {ability.name}...</color>");
-        
-        if (targetingCursor != null)
-        {
-            Cursor.SetCursor(targetingCursor, hotSpot, cursorMode);
-        }
+        if (targetingCursor != null) Cursor.SetCursor(targetingCursor, hotSpot, cursorMode);
     }
 
     public void OnUnitClicked(CardDisplay targetUnit)
     {
         if (!isTargetingMode || pendingAbility == null) return;
-
         AbilityManager.instance.CastTargetedAbility(pendingAbility, targetUnit);
-        
-        if (pendingAbility == activeHero.powerAbility)
-        {
-            heroPowerUsed = true;
-            UpdateUI();
-        }
-
+        if (pendingAbility == activeHero.powerAbility) { heroPowerUsed = true; UpdateUI(); }
         CancelTargeting();
     }
 
@@ -334,6 +320,8 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    // --- PURCHASE LOGIC (Analytics Added) ---
+
     public bool TryBuyToHand(UnitData data, CardDisplay sourceCard)
     {
         if (!TrySpendGold(data.cost)) return false;
@@ -348,9 +336,16 @@ public class GameManager : MonoBehaviour
         sourceCard.transform.SetParent(playerHand);
         sourceCard.isPurchased = true;
         LogAction($"Bought {data.unitName} to Hand");
+        
+        // ANALYTICS: Track Purchase
+        if (AnalyticsManager.instance != null)
+            AnalyticsManager.instance.TrackPurchase(data.unitName, data.cost);
+
         CheckForTriples(data); 
         return true;
     }
+
+    // ... (TryPlayCardToBoard, SelectUnit, DeselectUnit, SellUnit etc. remain same) ...
 
     public bool TryPlayCardToBoard(CardDisplay card)
     {
@@ -380,7 +375,6 @@ public class GameManager : MonoBehaviour
             OnUnitClicked(unit);
             return;
         }
-
         if (currentPhase != GamePhase.Recruit || isUnconscious) return;
         selectedUnit = unit;
         Debug.Log($"Selected {unit.unitData.unitName}");
@@ -400,7 +394,6 @@ public class GameManager : MonoBehaviour
         Destroy(unitToSell.gameObject);
         
         if (selectedUnit == unitToSell) DeselectUnit();
-        
         if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras(); 
         UpdateUI();
     }
@@ -439,12 +432,8 @@ public class GameManager : MonoBehaviour
             for(int i=0; i<3; i++)
             {
                 CardDisplay c = matches[i];
-                // Clamp bonuses to 0 so we don't accidentally subtract stats if unit was debuffed
                 int atkBonus = Mathf.Max(0, c.permanentAttack - c.unitData.baseAttack);
                 int hpBonus = Mathf.Max(0, c.permanentHealth - c.unitData.baseHealth);
-                
-                Debug.Log($"Consuming {c.unitData.unitName}: Perm({c.permanentAttack}/{c.permanentHealth}) - Base({c.unitData.baseAttack}/{c.unitData.baseHealth}) = Bonus({atkBonus}/{hpBonus})");
-
                 totalBonusAttack += atkBonus;
                 totalBonusHealth += hpBonus;
                 Destroy(c.gameObject);
@@ -461,8 +450,6 @@ public class GameManager : MonoBehaviour
             goldenDisplay.permanentAttack += totalBonusAttack;
             goldenDisplay.permanentHealth += totalBonusHealth;
             
-            Debug.Log($"Created Golden {unitData.unitName} with {goldenDisplay.permanentAttack}/{goldenDisplay.permanentHealth} (Base*2 + {totalBonusAttack}/{totalBonusHealth})");
-
             goldenDisplay.ResetToPermanent();
             goldenDisplay.UpdateVisuals();
             
@@ -474,6 +461,14 @@ public class GameManager : MonoBehaviour
     {
         playerHealth += amount;
         if (playerHealth > maxPlayerHealth) playerHealth = maxPlayerHealth;
+        
+        // ANALYTICS: Check Death
+        if (playerHealth <= 0 && amount < 0)
+        {
+            if (AnalyticsManager.instance != null) 
+                AnalyticsManager.instance.TrackDeath(turnNumber);
+        }
+        
         UpdateUI();
     }
 
@@ -491,7 +486,6 @@ public class GameManager : MonoBehaviour
             string status = heroPowerUsed ? "(Used)" : $"(2g)";
             heroText.text = $"{activeHero.heroName} Power: {activeHero.powerName} {status}";
         }
-
         if (tierText != null)
         {
              ShopManager shop = FindFirstObjectByType<ShopManager>();

@@ -8,7 +8,9 @@ public class CombatManager : MonoBehaviour
     public static CombatManager instance;
 
     [Header("Game Pace")]
+    [Tooltip("Time between attacks. Lower is faster.")]
     public float combatPace = 0.5f; 
+    [Tooltip("Time to wait before returning to shop.")]
     public float shopReturnDelay = 1.0f;
 
     [Header("References")]
@@ -109,6 +111,8 @@ public class CombatManager : MonoBehaviour
         foreach (var p in players) { combatHealths[p] = p.currentHealth; combatAttacks[p] = p.currentAttack; }
         foreach (var e in enemies) { combatHealths[e] = e.currentHealth; combatAttacks[e] = e.currentAttack; }
 
+        int round = 1;
+
         while (players.Count > 0 && enemies.Count > 0)
         {
             players = GetUnits(playerBoard);
@@ -120,6 +124,8 @@ public class CombatManager : MonoBehaviour
 
             if (!combatHealths.ContainsKey(pUnit)) { combatHealths[pUnit] = pUnit.currentHealth; combatAttacks[pUnit] = pUnit.currentAttack; }
             if (!combatHealths.ContainsKey(eUnit)) { combatHealths[eUnit] = eUnit.currentHealth; combatAttacks[eUnit] = eUnit.currentAttack; }
+
+            Debug.Log($"<color=red>Round {round}:</color> {pUnit.unitData.unitName}({combatHealths[pUnit]}hp) vs {eUnit.unitData.unitName}({combatHealths[eUnit]}hp)");
 
             yield return StartCoroutine(AnimateAttack(pUnit.transform, eUnit.transform));
             yield return StartCoroutine(AnimateAttack(eUnit.transform, pUnit.transform));
@@ -136,9 +142,18 @@ public class CombatManager : MonoBehaviour
             bool pDies = combatHealths[pUnit] <= 0;
             bool eDies = combatHealths[eUnit] <= 0;
 
-            if (eDies) KillUnit(eUnit, enemies, true);
-            if (pDies) KillUnit(pUnit, players, false);
+            if (eDies) 
+            {
+                Debug.Log($"Enemy {eUnit.unitData.unitName} died.");
+                KillUnit(eUnit, enemies, true);
+            }
+            if (pDies) 
+            {
+                Debug.Log($"Player {pUnit.unitData.unitName} died.");
+                KillUnit(pUnit, players, false);
+            }
 
+            round++;
             yield return new WaitForSeconds(combatPace);
         }
 
@@ -160,12 +175,10 @@ public class CombatManager : MonoBehaviour
         if (unit.healthText == null) return;
         unit.healthText.text = currentHp.ToString();
         
-        // During combat, we check against permanent max. 
-        // If < Max, it's RED.
+        int maxHp = unit.isGolden ? unit.unitData.baseHealth * 2 : unit.unitData.baseHealth;
         if (currentHp < unit.permanentHealth) unit.healthText.color = Color.red;
-        // Note: We don't generally show green for "buffed" mid-combat, 
-        // red for damage is more important.
-        else unit.healthText.color = Color.black; 
+        else if (currentHp > maxHp) unit.healthText.color = Color.green;
+        else unit.healthText.color = Color.black;
     }
 
     void KillUnit(CardDisplay unit, List<CardDisplay> list, bool isEnemy)
@@ -222,6 +235,16 @@ public class CombatManager : MonoBehaviour
     void EndCombat(bool playerWon, int damageTaken)
     {
         if (damageTaken > 0) GameManager.instance.ModifyHealth(-damageTaken);
+        
+        // ANALYTICS: Track Result
+        if (AnalyticsManager.instance != null)
+            AnalyticsManager.instance.TrackRoundResult(
+                GameManager.instance.turnNumber, 
+                playerWon, 
+                damageTaken, 
+                GameManager.instance.playerHealth
+            );
+
         GameManager.instance.LogGameState($"Post-Combat (Damage: {damageTaken})");
 
         if (GameManager.instance.playerHealth <= 0) DeathSaveManager.instance.StartDeathSequence();
@@ -284,7 +307,6 @@ public class CombatManager : MonoBehaviour
         ShopManager shop = FindFirstObjectByType<ShopManager>();
         if (shop != null) 
         {
-            // NEW: Apply discount logic
             shop.ReduceUpgradeCost();
             shop.RerollShop();
         }
