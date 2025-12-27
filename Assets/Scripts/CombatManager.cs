@@ -8,9 +8,7 @@ public class CombatManager : MonoBehaviour
     public static CombatManager instance;
 
     [Header("Game Pace")]
-    [Tooltip("Time between attacks. Lower is faster.")]
     public float combatPace = 0.5f; 
-    [Tooltip("Time to wait before returning to shop.")]
     public float shopReturnDelay = 1.0f;
 
     [Header("References")]
@@ -28,6 +26,8 @@ public class CombatManager : MonoBehaviour
         public int permAttack;
         public int permHealth;
         public bool wasInHand; 
+        // Note: We don't save Reborn/Shield states for next round (they reset), 
+        // unless you want persistent broken shields? Standard is reset.
     }
 
     private List<SavedUnit> savedPlayerRoster = new List<SavedUnit>();
@@ -76,8 +76,6 @@ public class CombatManager : MonoBehaviour
             snap.permHealth = cd.permanentHealth;
             snap.wasInHand = inHand;
             savedPlayerRoster.Add(snap);
-
-            if (snap.isGolden) Debug.Log($"Saving GOLDEN status for {snap.template.unitName} (In Hand: {inHand})");
         }
     }
 
@@ -105,13 +103,9 @@ public class CombatManager : MonoBehaviour
         List<CardDisplay> players = GetUnits(playerBoard);
         List<CardDisplay> enemies = GetUnits(enemyBoard);
 
-        Dictionary<CardDisplay, int> combatHealths = new Dictionary<CardDisplay, int>();
-        Dictionary<CardDisplay, int> combatAttacks = new Dictionary<CardDisplay, int>();
-
-        foreach (var p in players) { combatHealths[p] = p.currentHealth; combatAttacks[p] = p.currentAttack; }
-        foreach (var e in enemies) { combatHealths[e] = e.currentHealth; combatAttacks[e] = e.currentAttack; }
-
-        int round = 1;
+        // SYNC STARTING STATS to CardDisplay internal trackers
+        // We will rely on CardDisplay.currentHealth/Attack for the source of truth
+        // instead of a local Dictionary, because CardDisplay handles Divine Shield logic.
 
         while (players.Count > 0 && enemies.Count > 0)
         {
@@ -119,44 +113,38 @@ public class CombatManager : MonoBehaviour
             enemies = GetUnits(enemyBoard);
             if (players.Count == 0 || enemies.Count == 0) break;
 
-            CardDisplay pUnit = players[0];
-            CardDisplay eUnit = enemies[0];
+            // 1. Pick Attacker (Leftmost)
+            CardDisplay pAttacker = players[0];
+            CardDisplay eAttacker = enemies[0];
 
-            if (!combatHealths.ContainsKey(pUnit)) { combatHealths[pUnit] = pUnit.currentHealth; combatAttacks[pUnit] = pUnit.currentAttack; }
-            if (!combatHealths.ContainsKey(eUnit)) { combatHealths[eUnit] = eUnit.currentHealth; combatAttacks[eUnit] = eUnit.currentAttack; }
+            // 2. Pick Targets (Handle TAUNT)
+            CardDisplay pTarget = GetTarget(pAttacker, enemies); // Player unit attacks Enemy unit
+            CardDisplay eTarget = GetTarget(eAttacker, players); // Enemy unit attacks Player unit
 
-            Debug.Log($"<color=red>Round {round}:</color> {pUnit.unitData.unitName}({combatHealths[pUnit]}hp) vs {eUnit.unitData.unitName}({combatHealths[eUnit]}hp)");
+            // 3. Animation
+            yield return StartCoroutine(AnimateAttack(pAttacker.transform, pTarget.transform));
+            yield return StartCoroutine(AnimateAttack(eAttacker.transform, eTarget.transform));
 
-            yield return StartCoroutine(AnimateAttack(pUnit.transform, eUnit.transform));
-            yield return StartCoroutine(AnimateAttack(eUnit.transform, pUnit.transform));
+            // 4. Deal Damage
+            // Note: We use the Attacker's attack vs the Target's TakeDamage function
+            int pDmg = eAttacker.currentAttack;
+            int eDmg = pAttacker.currentAttack;
 
-            int pDmg = combatAttacks[eUnit];
-            int eDmg = combatAttacks[pUnit];
+            pTarget.TakeDamage(pDmg); // Enemy hits Player Unit
+            eTarget.TakeDamage(eDmg); // Player hits Enemy Unit
 
-            combatHealths[pUnit] -= pDmg;
-            combatHealths[eUnit] -= eDmg;
+            // 5. Check Deaths
+            bool pDies = pTarget.currentHealth <= 0;
+            bool eDies = eTarget.currentHealth <= 0;
 
-            UpdateCombatVisuals(pUnit, combatHealths[pUnit]);
-            UpdateCombatVisuals(eUnit, combatHealths[eUnit]);
+            // Handle Reborn / Death
+            if (eDies) HandleDeath(eTarget, enemies);
+            if (pDies) HandleDeath(pTarget, players);
 
-            bool pDies = combatHealths[pUnit] <= 0;
-            bool eDies = combatHealths[eUnit] <= 0;
-
-            if (eDies) 
-            {
-                Debug.Log($"Enemy {eUnit.unitData.unitName} died.");
-                KillUnit(eUnit, enemies, true);
-            }
-            if (pDies) 
-            {
-                Debug.Log($"Player {pUnit.unitData.unitName} died.");
-                KillUnit(pUnit, players, false);
-            }
-
-            round++;
             yield return new WaitForSeconds(combatPace);
         }
 
+        // Damage Calculation
         enemies = GetUnits(enemyBoard);
         players = GetUnits(playerBoard);
         int damageTaken = 0;
@@ -170,25 +158,45 @@ public class CombatManager : MonoBehaviour
         EndCombat(players.Count > 0, damageTaken);
     }
 
-    void UpdateCombatVisuals(CardDisplay unit, int currentHp)
+    CardDisplay GetTarget(CardDisplay attacker, List<CardDisplay> defenders)
     {
-        if (unit.healthText == null) return;
-        unit.healthText.text = currentHp.ToString();
+        // Check for Taunt
+        List<CardDisplay> taunts = new List<CardDisplay>();
+        foreach(var d in defenders)
+        {
+            if (d.unitData.hasTaunt) taunts.Add(d);
+        }
+
+        if (taunts.Count > 0)
+        {
+            return taunts[Random.Range(0, taunts.Count)];
+        }
         
-        int maxHp = unit.isGolden ? unit.unitData.baseHealth * 2 : unit.unitData.baseHealth;
-        if (currentHp < unit.permanentHealth) unit.healthText.color = Color.red;
-        else if (currentHp > maxHp) unit.healthText.color = Color.green;
-        else unit.healthText.color = Color.black;
+        // No taunt, random target
+        return defenders[Random.Range(0, defenders.Count)];
     }
 
-    void KillUnit(CardDisplay unit, List<CardDisplay> list, bool isEnemy)
+    void HandleDeath(CardDisplay unit, List<CardDisplay> list)
     {
+        // 1. REBORN CHECK
+        if (unit.hasReborn)
+        {
+            Debug.Log($"{unit.unitData.unitName} Reborn!");
+            unit.hasReborn = false; // Consume Reborn
+            unit.currentHealth = 1; // Set HP to 1
+            unit.damageTaken = unit.permanentHealth - 1; // Sync damage tracking
+            unit.UpdateVisuals();
+            return; // SURVIVED!
+        }
+
+        // 2. DEATHRATTLES
         if (AbilityManager.instance != null)
         {
             try { AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnDeath, unit); }
             catch (System.Exception e) { Debug.LogError($"Deathrattle error: {e.Message}"); }
         }
 
+        // 3. CLEANUP
         list.Remove(unit);
         if (graveyard != null) unit.transform.SetParent(graveyard);
         unit.gameObject.SetActive(false);
@@ -235,16 +243,6 @@ public class CombatManager : MonoBehaviour
     void EndCombat(bool playerWon, int damageTaken)
     {
         if (damageTaken > 0) GameManager.instance.ModifyHealth(-damageTaken);
-        
-        // ANALYTICS: Track Result
-        if (AnalyticsManager.instance != null)
-            AnalyticsManager.instance.TrackRoundResult(
-                GameManager.instance.turnNumber, 
-                playerWon, 
-                damageTaken, 
-                GameManager.instance.playerHealth
-            );
-
         GameManager.instance.LogGameState($"Post-Combat (Damage: {damageTaken})");
 
         if (GameManager.instance.playerHealth <= 0) DeathSaveManager.instance.StartDeathSequence();

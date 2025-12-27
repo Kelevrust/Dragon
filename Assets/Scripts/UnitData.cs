@@ -1,9 +1,16 @@
 using UnityEngine;
 using System.Collections.Generic;
 
+// UPDATED: Neon Noir Flavor
 public enum Tribe 
 { 
-    None, Human, Undead, Beast, Dragon, Construct, Elemental 
+    None, 
+    Syndicate, // Humans/Cops/Mob
+    Specter,   // Undead/Ghosts
+    Feral,     // Beasts/Werewolves
+    Construct, // Golems/Drones
+    Arcane,    // Magic/Fae/Witches
+    Eldritch   // Demons/Cosmic Horror
 }
 
 [CreateAssetMenu(fileName = "New Unit", menuName = "DnD Battler/Unit Data")]
@@ -13,7 +20,7 @@ public class UnitData : ScriptableObject
     public string id;
     public string unitName;
     
-    // NEW: CardDisplay looks for this exact name
+    // RENAMED from abilityDescription to description
     [TextArea] public string description; 
 
     [Header("Stats")]
@@ -26,6 +33,7 @@ public class UnitData : ScriptableObject
     public Tribe tribe;
     
     [Header("New Ability System")]
+    // Initialize with empty list to prevent NullReferenceException
     public List<AbilityData> abilities = new List<AbilityData>(); 
 
     [Header("Visuals")]

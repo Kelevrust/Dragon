@@ -26,6 +26,12 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     public int currentAttack;
     public int currentHealth;
     
+    // NEW: Runtime Keywords
+    public bool hasDivineShield;
+    public bool hasReborn;
+    // Taunt usually doesn't "break", so we can read it from unitData, 
+    // but if you want to be able to give/remove taunt later, add a bool here.
+
     public int damageTaken = 0;
 
     private Color originalAttackColor = Color.black; 
@@ -62,12 +68,15 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         InitializeColors();
         unitData = data;
         
-        // Only reset if NOT golden (prevents accidental overwrite during restore)
         if (!isGolden)
         {
             permanentAttack = data.baseAttack;
             permanentHealth = data.baseHealth;
         }
+        
+        // Initialize Keywords
+        hasDivineShield = data.hasDivineShield;
+        hasReborn = data.hasReborn;
         
         damageTaken = 0;
         ResetToPermanent();
@@ -77,17 +86,12 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     public void ResetToPermanent()
     {
         currentAttack = permanentAttack;
-        // Apply damage logic: Current is Max - Damage
         currentHealth = permanentHealth - damageTaken;
     }
 
     public void MakeGolden()
     {
         isGolden = true;
-        
-        // FIX: Restore the logic that doubles the base stats
-        // CombatManager will overwrite this with saved values if needed, 
-        // but GameManager relies on this for new Golden units.
         permanentAttack = unitData.baseAttack * 2;
         permanentHealth = unitData.baseHealth * 2;
         
@@ -97,6 +101,14 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
 
     public void TakeDamage(int amount)
     {
+        if (amount > 0 && hasDivineShield)
+        {
+            hasDivineShield = false;
+            // TODO: Play Shield Break Sound/VFX
+            UpdateVisuals();
+            return; // No damage taken
+        }
+
         damageTaken += amount;
         ResetToPermanent();
         UpdateVisuals();
@@ -116,7 +128,6 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         if (attackText != null) 
         {
             attackText.text = currentAttack.ToString();
-            // Attack Logic: Green (Buffed) > Red (Debuffed) > Original
             if (currentAttack > baseAtk) attackText.color = Color.green;
             else if (currentAttack < baseAtk) attackText.color = Color.red;
             else attackText.color = originalAttackColor; 
@@ -126,20 +137,11 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         {
             healthText.text = currentHealth.ToString();
             
-            // Health Logic: RED takes priority (If damaged at all). 
-            if (currentHealth < permanentHealth) 
-            {
-                healthText.color = Color.red;
-            }
-            // Then GREEN (If buffed above base and full HP)
-            else if (currentHealth > baseHp) 
-            {
-                healthText.color = Color.green;
-            }
-            else 
-            {
-                healthText.color = originalHealthColor;
-            }
+            // Visual logic for Divine Shield (Yellow Text? Or just an Icon later?)
+            if (hasDivineShield) healthText.color = Color.yellow; 
+            else if (currentHealth < permanentHealth) healthText.color = Color.red;
+            else if (currentHealth > baseHp) healthText.color = Color.green;
+            else healthText.color = originalHealthColor;
         }
         
         if (frameImage != null) 
@@ -191,7 +193,6 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         {
             GameObject hitObject = result.gameObject;
 
-            // 1. Sell Button
             if (hitObject.name.Contains("SellButton")) 
             {
                 if (isPurchased)
@@ -202,9 +203,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
                 }
             }
             
-            // 2. Player Hand (Buying)
             bool hitHand = hitObject.name == "PlayerHand" || (hitObject.transform.parent != null && hitObject.transform.parent.name == "PlayerHand");
-            
             if (hitHand)
             {
                 if (!isPurchased) 
@@ -220,9 +219,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
                 if (actionHandled) break;
             }
 
-            // 3. Player Board (Playing or Rearranging)
             bool hitBoard = hitObject.name == "PlayerBoard" || (hitObject.transform.parent != null && hitObject.transform.parent.name == "PlayerBoard");
-
             if (hitBoard && isPurchased)
             {
                 Transform boardTransform = GameManager.instance.playerBoard;
@@ -250,7 +247,6 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
 
         if (!actionHandled) ReturnToStart();
         
-        // Recalc on drop (applying aura source)
         if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
     }
 
@@ -261,7 +257,6 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
     }
 
-    // --- CLICK LOGIC ---
     public void OnPointerClick(PointerEventData eventData)
     {
         if (eventData.dragging) return; 
@@ -277,7 +272,6 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
 
         if (!isPurchased)
         {
-            // Only buy on Double Click
             if (eventData.clickCount >= 2)
             {
                 GameManager.instance.TryBuyToHand(unitData, this);
@@ -285,12 +279,10 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         }
         else
         {
-            // If in Hand, Double Click -> Play to Board
             if (eventData.clickCount >= 2 && transform.parent == GameManager.instance.playerHand)
             {
                 GameManager.instance.TryPlayCardToBoard(this);
             }
-            // Else just select
             else
             {
                 GameManager.instance.SelectUnit(this);

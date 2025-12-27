@@ -10,18 +10,18 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 00e4fb7d95a6d1e4183f887e469ccdf6, type: 3}
-  m_Name: Skeleton
+  m_Name: StrayDog
   m_EditorClassIdentifier: Assembly-CSharp::UnitData
   id: 
-  unitName: Skeleton
+  unitName: Dire Wolf
   description: 
   tier: 1
   cost: 3
-  baseAttack: 1
-  baseHealth: 3
-  tribe: 2
+  baseAttack: 2
+  baseHealth: 2
+  tribe: 3
   abilities:
-  - {fileID: 11400000, guid: 5ebbd636376c38b48ba2589bc1acf547, type: 2}
+  - {fileID: 0}
   artwork: {fileID: 10913, guid: 0000000000000000f000000000000000, type: 0}
   frameColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   unitModelPrefab: {fileID: 0}
