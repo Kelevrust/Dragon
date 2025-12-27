@@ -28,8 +28,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     
     public int damageTaken = 0;
 
-    // Visual State
-    private Color originalAttackColor = Color.black; // Default fallback
+    private Color originalAttackColor = Color.black; 
     private Color originalHealthColor = Color.black;
     private bool colorsInitialized = false;
 
@@ -41,13 +40,11 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
 
     void Start()
     {
-        InitializeColors(); // Ensure we capture colors before modifying them
-        
+        InitializeColors();
         if (unitData != null && !isGolden) LoadUnit(unitData);
         
         canvasGroup = GetComponent<CanvasGroup>();
         if (canvasGroup == null) canvasGroup = gameObject.AddComponent<CanvasGroup>();
-        
         Canvas canvas = GetComponentInParent<Canvas>();
         if (canvas != null) canvasTransform = canvas.transform;
     }
@@ -55,23 +52,24 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     void InitializeColors()
     {
         if (colorsInitialized) return;
-        
         if (attackText != null) originalAttackColor = attackText.color;
         if (healthText != null) originalHealthColor = healthText.color;
-        
         colorsInitialized = true;
     }
 
     public void LoadUnit(UnitData data)
     {
-        InitializeColors(); // Capture colors if LoadUnit is called before Start
+        InitializeColors();
         unitData = data;
         
-        // Initialize permanent stats from base
-        permanentAttack = data.baseAttack;
-        permanentHealth = data.baseHealth;
-        damageTaken = 0;
+        // Only reset if NOT golden (prevents accidental overwrite during restore)
+        if (!isGolden)
+        {
+            permanentAttack = data.baseAttack;
+            permanentHealth = data.baseHealth;
+        }
         
+        damageTaken = 0;
         ResetToPermanent();
         UpdateVisuals();
     }
@@ -79,14 +77,20 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     public void ResetToPermanent()
     {
         currentAttack = permanentAttack;
+        // Apply damage logic: Current is Max - Damage
         currentHealth = permanentHealth - damageTaken;
     }
 
     public void MakeGolden()
     {
         isGolden = true;
+        
+        // FIX: Restore the logic that doubles the base stats
+        // CombatManager will overwrite this with saved values if needed, 
+        // but GameManager relies on this for new Golden units.
         permanentAttack = unitData.baseAttack * 2;
         permanentHealth = unitData.baseHealth * 2;
+        
         ResetToPermanent();
         UpdateVisuals();
     }
@@ -106,15 +110,13 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         if (descriptionText != null) descriptionText.text = unitData.description;
         if (artworkImage != null) artworkImage.sprite = unitData.artwork;
         
-        // Helper: Calculate what the "Base" is (taking Golden into account)
         int baseAtk = isGolden ? unitData.baseAttack * 2 : unitData.baseAttack;
         int baseHp = isGolden ? unitData.baseHealth * 2 : unitData.baseHealth;
 
         if (attackText != null) 
         {
             attackText.text = currentAttack.ToString();
-            
-            // Logic: Green if Buffed (Current > Base), Red if Debuffed (Current < Base), Original otherwise
+            // Attack Logic: Green (Buffed) > Red (Debuffed) > Original
             if (currentAttack > baseAtk) attackText.color = Color.green;
             else if (currentAttack < baseAtk) attackText.color = Color.red;
             else attackText.color = originalAttackColor; 
@@ -124,15 +126,12 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         {
             healthText.text = currentHealth.ToString();
             
-            // Logic: 
-            // 1. Red if Damaged (Current < Permanent Max) -> Damage takes priority visualization
-            // 2. Green if Buffed (Current > Base) AND NOT Damaged
-            // 3. Original otherwise
-            
+            // Health Logic: RED takes priority (If damaged at all). 
             if (currentHealth < permanentHealth) 
             {
                 healthText.color = Color.red;
             }
+            // Then GREEN (If buffed above base and full HP)
             else if (currentHealth > baseHp) 
             {
                 healthText.color = Color.green;
@@ -162,7 +161,6 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         if (canvasTransform != null) transform.SetParent(canvasTransform);
         canvasGroup.blocksRaycasts = false;
         
-        // Recalc when lifting (removing aura source)
         if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
     }
 
@@ -216,6 +214,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
                 else 
                 {
                     transform.SetParent(GameManager.instance.playerHand);
+                    GameManager.instance.LogAction($"Reordered Hand: {unitData.unitName}");
                     actionHandled = true;
                 }
                 if (actionHandled) break;
@@ -242,6 +241,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
                         if (transform.position.x > child.position.x) newIndex++;
                     }
                     transform.SetSiblingIndex(newIndex);
+                    GameManager.instance.LogAction($"Reordered Board: {unitData.unitName} to pos {newIndex}");
                     actionHandled = true;
                 }
                 if (actionHandled) break;
@@ -262,14 +262,10 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     }
 
     // --- CLICK LOGIC ---
-    // ... inside CardDisplay.cs ...
-
-    // --- CLICK LOGIC ---
     public void OnPointerClick(PointerEventData eventData)
     {
         if (eventData.dragging) return; 
 
-        // NEW: Check Targeting Mode First
         if (GameManager.instance.isTargetingMode)
         {
             GameManager.instance.OnUnitClicked(this);

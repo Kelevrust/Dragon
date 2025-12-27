@@ -13,9 +13,11 @@ MonoBehaviour:
   m_Name: Cleric_Buff
   m_EditorClassIdentifier: Assembly-CSharp::AbilityData
   triggerType: 0
-  targetType: 2
+  targetType: 3
+  targetTribe: 0
   effectType: 0
   valueX: 1
   valueY: 1
   tokenUnit: {fileID: 0}
+  spawnLocation: 0
   vfxPrefab: {fileID: 0}

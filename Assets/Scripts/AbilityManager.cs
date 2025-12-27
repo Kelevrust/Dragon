@@ -7,16 +7,18 @@ public class AbilityManager : MonoBehaviour
 
     void Awake() { instance = this; }
 
-    public void TriggerAbilities(AbilityTrigger trigger, CardDisplay sourceCard)
+    // UPDATED: Added optional overrideBoard for Deathrattles
+    public void TriggerAbilities(AbilityTrigger trigger, CardDisplay sourceCard, Transform overrideBoard = null)
     {
-        if (sourceCard == null || sourceCard.unitData == null) return;
+        if (sourceCard == null) return;
+        if (sourceCard.unitData == null) return;
         if (sourceCard.unitData.abilities == null) return;
 
         foreach (AbilityData ability in sourceCard.unitData.abilities)
         {
             if (ability != null && ability.triggerType == trigger)
             {
-                ExecuteAbility(ability, sourceCard, null);
+                ExecuteAbility(ability, sourceCard, null, overrideBoard);
             }
         }
     }
@@ -25,7 +27,7 @@ public class AbilityManager : MonoBehaviour
     {
         if (ability == null) return;
         Debug.Log($"Casting Hero Power: {ability.name}");
-        ExecuteAbility(ability, null, null);
+        ExecuteAbility(ability, null, null, null);
     }
 
     public void CastTargetedAbility(AbilityData ability, CardDisplay target)
@@ -35,7 +37,7 @@ public class AbilityManager : MonoBehaviour
         if (GameManager.instance.TrySpendGold(GameManager.instance.activeHero.powerCost))
         {
             Debug.Log($"Casting Targeted Hero Power on {target.unitData.unitName}");
-            ApplyEffect(ability, target, null);
+            ApplyEffect(ability, target, null, null);
         }
     }
 
@@ -62,7 +64,7 @@ public class AbilityManager : MonoBehaviour
 
                 if (ability.triggerType == AbilityTrigger.PassiveAura)
                 {
-                    ExecuteAbility(ability, source, null);
+                    ExecuteAbility(ability, source, null, null);
                 }
             }
         }
@@ -73,11 +75,11 @@ public class AbilityManager : MonoBehaviour
         }
     }
 
-    void ExecuteAbility(AbilityData ability, CardDisplay source, CardDisplay specificTarget)
+    void ExecuteAbility(AbilityData ability, CardDisplay source, CardDisplay specificTarget, Transform overrideBoard)
     {
         if (ability == null) return;
 
-        List<CardDisplay> targets = FindTargets(ability, source);
+        List<CardDisplay> targets = FindTargets(ability, source, overrideBoard);
 
         if (specificTarget != null)
         {
@@ -85,21 +87,20 @@ public class AbilityManager : MonoBehaviour
             targets.Add(specificTarget);
         }
 
-        // Execute if targets found OR if targeting is "None" / "Self" / "Summon"
-        if (targets.Count == 0 && (ability.targetType == AbilityTarget.None || ability.targetType == AbilityTarget.Self || ability.effectType == AbilityEffect.SummonUnit))
+        if (targets.Count == 0 && (ability.targetType == AbilityTarget.None || ability.targetType == AbilityTarget.Self || ability.effectType == AbilityEffect.SummonUnit || ability.effectType == AbilityEffect.HealHero))
         {
-            ApplyEffect(ability, null, source); 
+            ApplyEffect(ability, null, source, overrideBoard); 
         }
         else
         {
             foreach (CardDisplay target in targets)
             {
-                ApplyEffect(ability, target, source);
+                ApplyEffect(ability, target, source, overrideBoard);
             }
         }
     }
 
-    void ApplyEffect(AbilityData ability, CardDisplay target, CardDisplay source)
+    void ApplyEffect(AbilityData ability, CardDisplay target, CardDisplay source, Transform overrideBoard)
     {
         if (ability == null) return;
 
@@ -113,7 +114,8 @@ public class AbilityManager : MonoBehaviour
                     int atk = ability.valueX;
                     int hp = ability.valueY;
 
-                    if (isSourceGolden && ability.triggerType == AbilityTrigger.PassiveAura)
+                    // FIX: Apply Golden Multiplier to ALL buff effects (Battlecries AND Auras)
+                    if (isSourceGolden)
                     {
                         atk *= 2;
                         hp *= 2;
@@ -128,9 +130,7 @@ public class AbilityManager : MonoBehaviour
                     {
                         target.permanentAttack += atk;
                         target.permanentHealth += hp;
-                        
-                        target.currentAttack += atk;
-                        target.currentHealth += hp;
+                        target.ResetToPermanent(); 
                         target.UpdateVisuals();
                     }
                 }
@@ -139,24 +139,16 @@ public class AbilityManager : MonoBehaviour
             case AbilityEffect.SummonUnit:
                 if (ability.tokenUnit == null) return;
                 
-                // Determine board source if possible
-                Transform spawnParent = (source != null) ? source.transform.parent : null;
-                
-                // Use new Smart Summon logic
-                if (GameManager.instance != null)
+                Transform spawnParent = overrideBoard;
+                if (spawnParent == null) spawnParent = (source != null) ? source.transform.parent : null;
+                if (spawnParent == null && GameManager.instance != null) spawnParent = GameManager.instance.playerBoard;
+
+                if (spawnParent != null && GameManager.instance != null)
                 {
-                    // If source is a unit (Deathrattle), default to BoardOnly on that specific board
-                    if (source != null && spawnParent != null)
-                    {
-                        GameManager.instance.SpawnToken(ability.tokenUnit, spawnParent);
-                    }
-                    else
-                    {
-                        // Hero Power Logic: Use Ability Preference
-                        Transform replaceTarget = target != null ? target.transform : null;
-                        GameManager.instance.TrySpawnUnit(ability.tokenUnit, ability.spawnLocation, replaceTarget);
-                    }
-                    
+                    // Golden Summon Logic: Spawn a Golden Token?
+                    // For now, let's keep standard logic, but in future, you might want to 
+                    // create a "Golden Token" version if isSourceGolden is true.
+                    GameManager.instance.SpawnToken(ability.tokenUnit, spawnParent);
                     RecalculateAuras();
                 }
                 break;
@@ -164,7 +156,11 @@ public class AbilityManager : MonoBehaviour
             case AbilityEffect.GainGold:
                 if (GameManager.instance != null)
                 {
-                    GameManager.instance.gold += ability.valueX;
+                    // Golden economy units give double gold
+                    int amount = ability.valueX;
+                    if (isSourceGolden) amount *= 2;
+
+                    GameManager.instance.gold += amount;
                     GameManager.instance.UpdateUI();
                 }
                 break;
@@ -172,24 +168,24 @@ public class AbilityManager : MonoBehaviour
             case AbilityEffect.HealHero:
                 if (GameManager.instance != null)
                 {
-                    GameManager.instance.ModifyHealth(ability.valueX);
+                    int amount = ability.valueX;
+                    if (isSourceGolden) amount *= 2;
+                    
+                    GameManager.instance.ModifyHealth(amount);
                 }
                 break;
         }
     }
 
-    List<CardDisplay> FindTargets(AbilityData ability, CardDisplay source)
+    List<CardDisplay> FindTargets(AbilityData ability, CardDisplay source, Transform overrideBoard)
     {
         List<CardDisplay> targets = new List<CardDisplay>();
         
-        Transform board = null;
-        if (source != null && source.transform.parent != null) 
+        Transform board = overrideBoard;
+        if (board == null)
         {
-            board = source.transform.parent;
-        }
-        else if (GameManager.instance != null) 
-        {
-            board = GameManager.instance.playerBoard;
+            if (source != null && source.transform.parent != null) board = source.transform.parent;
+            else if (GameManager.instance != null) board = GameManager.instance.playerBoard;
         }
 
         if (board == null) return targets;
@@ -201,10 +197,14 @@ public class AbilityManager : MonoBehaviour
             if(cd != null && cd.gameObject.activeInHierarchy) allies.Add(cd);
         }
 
+        if (source != null && !allies.Contains(source) && source.transform.parent == board)
+        {
+            allies.Add(source);
+        }
+
         switch (ability.targetType)
         {
             case AbilityTarget.None:
-                // No specific target needed (used for Summons)
                 break;
 
             case AbilityTarget.Self:
@@ -227,22 +227,22 @@ public class AbilityManager : MonoBehaviour
 
             case AbilityTarget.AdjacentFriendly:
                 if (source == null) break;
-                CardDisplay[] boardCards = board.GetComponentsInChildren<CardDisplay>();
                 List<CardDisplay> boardList = new List<CardDisplay>();
-                foreach(var c in boardCards) if (c.gameObject.activeInHierarchy) boardList.Add(c);
+                foreach(Transform t in board)
+                {
+                     CardDisplay c = t.GetComponent<CardDisplay>();
+                     if (c != null && c.gameObject.activeInHierarchy) boardList.Add(c);
+                }
 
                 int index = boardList.IndexOf(source);
                 if (index > 0) targets.Add(boardList[index - 1]); 
-                if (index < boardList.Count - 1) targets.Add(boardList[index + 1]); 
+                if (index >= 0 && index < boardList.Count - 1) targets.Add(boardList[index + 1]); 
                 break;
 
             case AbilityTarget.AllFriendlyTribe:
                 foreach(var ally in allies)
                 {
-                    if (ally.unitData.tribe == ability.targetTribe)
-                    {
-                        targets.Add(ally);
-                    }
+                    if (ally.unitData.tribe == ability.targetTribe) targets.Add(ally);
                 }
                 break;
 
@@ -250,10 +250,7 @@ public class AbilityManager : MonoBehaviour
                 List<CardDisplay> tribeAllies = new List<CardDisplay>();
                 foreach(var ally in allies)
                 {
-                    if (ally != source && ally.unitData.tribe == ability.targetTribe)
-                    {
-                        tribeAllies.Add(ally);
-                    }
+                    if (ally != source && ally.unitData.tribe == ability.targetTribe) tribeAllies.Add(ally);
                 }
                 if (tribeAllies.Count > 0)
                 {

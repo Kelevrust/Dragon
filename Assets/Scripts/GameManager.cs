@@ -30,6 +30,7 @@ public class GameManager : MonoBehaviour
     public TMP_Text turnText;
     public TMP_Text healthText; 
     public TMP_Text heroText;   
+    public TMP_Text tierText;
     
     [Header("Targeting")]
     public bool isTargetingMode = false;
@@ -68,149 +69,10 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    // --- SMART SUMMONING LOGIC ---
-    public bool TrySpawnUnit(UnitData data, AbilitySpawnLocation location, Transform specificTargetParent = null)
+    public void LogAction(string action)
     {
-        if (data == null || cardPrefab == null) return false;
-
-        Transform targetParent = null;
-
-        // Determine where to put it
-        switch (location)
-        {
-            case AbilitySpawnLocation.BoardOnly:
-                if (playerBoard.childCount < 7) targetParent = playerBoard;
-                break;
-
-            case AbilitySpawnLocation.HandOnly:
-                if (playerHand.childCount < 7) targetParent = playerHand;
-                break;
-
-            case AbilitySpawnLocation.BoardThenHand:
-                if (playerBoard.childCount < 7) targetParent = playerBoard;
-                else if (playerHand.childCount < 7) targetParent = playerHand;
-                break;
-                
-            case AbilitySpawnLocation.ReplaceTarget:
-                // Only used if we selected a specific target to destroy
-                if (specificTargetParent != null)
-                {
-                    targetParent = specificTargetParent;
-                }
-                break;
-        }
-
-        // If no valid parent found (e.g. board full), fail
-        if (targetParent == null) 
-        {
-            Debug.Log("Spawn Failed: No Space!");
-            return false;
-        }
-
-        // Create the Unit
-        GameObject newCard = Instantiate(cardPrefab, targetParent);
-        CardDisplay display = newCard.GetComponent<CardDisplay>();
-        
-        if (display != null)
-        {
-            display.LoadUnit(data);
-            display.isPurchased = true; // Tokens are owned
-            
-            // If spawned directly to board, trigger OnPlay
-            if (targetParent == playerBoard)
-            {
-                if (AbilityManager.instance != null)
-                {
-                    AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnPlay, display);
-                    AbilityManager.instance.RecalculateAuras();
-                }
-            }
-            
-            CheckForTriples(data);
-            return true;
-        }
-        return false;
+        Debug.Log($"<color=white>[ACTION]</color> {action}");
     }
-
-    public void SpawnToken(UnitData data, Transform parent)
-    {
-        // Wrapper for compatibility with old AbilityManager calls
-        // Assumes "Force Spawn" logic
-        TrySpawnUnit(data, AbilitySpawnLocation.BoardOnly, parent); // Hacky fallback
-    }
-
-    // --- TARGETING SYSTEM ---
-
-    public void StartAbilityTargeting(AbilityData ability)
-    {
-        if (ability == null) return;
-
-        isTargetingMode = true;
-        pendingAbility = ability;
-        
-        Debug.Log($"<color=cyan>Select a target for {ability.name}...</color>");
-        
-        if (targetingCursor != null)
-        {
-            Cursor.SetCursor(targetingCursor, hotSpot, cursorMode);
-        }
-    }
-
-    public void OnUnitClicked(CardDisplay targetUnit)
-    {
-        if (!isTargetingMode || pendingAbility == null) return;
-
-        AbilityManager.instance.CastTargetedAbility(pendingAbility, targetUnit);
-        
-        if (pendingAbility == activeHero.powerAbility)
-        {
-            heroPowerUsed = true;
-            UpdateUI();
-        }
-
-        CancelTargeting();
-    }
-
-    public void CancelTargeting()
-    {
-        isTargetingMode = false;
-        pendingAbility = null;
-        Cursor.SetCursor(null, Vector2.zero, cursorMode); 
-    }
-
-    public void OnHeroPowerClick()
-    {
-        if (currentPhase != GamePhase.Recruit || isUnconscious) return;
-        if (heroPowerUsed) 
-        {
-            Debug.Log("Hero Power already used this turn!");
-            return;
-        }
-        if (activeHero == null || activeHero.powerAbility == null) return;
-
-        if (gold < activeHero.powerCost)
-        {
-            Debug.Log("Not enough Gold!");
-            return;
-        }
-
-        // Logic: If target is "Select", start mode. Else cast immediately.
-        if (activeHero.powerAbility.targetType == AbilityTarget.SelectTarget)
-        {
-            StartAbilityTargeting(activeHero.powerAbility);
-        }
-        else
-        {
-            if (TrySpendGold(activeHero.powerCost))
-            {
-                heroPowerUsed = true;
-                AbilityManager.instance.CastHeroPower(activeHero.powerAbility);
-                UpdateUI();
-            }
-        }
-    }
-
-    // --- EXISTING LOGIC ---
 
     public void LogGameState(string context)
     {
@@ -222,21 +84,25 @@ public class GameManager : MonoBehaviour
         sb.AppendLine($"HP: {playerHealth}/{maxPlayerHealth} | Gold: {gold}/{maxGold} | Unconscious: {isUnconscious}");
         
         sb.Append($"Board ({playerBoard.childCount}): ");
+        int i = 0;
         foreach(Transform child in playerBoard)
         {
             CardDisplay cd = child.GetComponent<CardDisplay>();
             if (cd != null) 
             {
-                sb.Append($"[{cd.unitData.unitName} {cd.currentAttack}/{cd.currentHealth} ({cd.permanentAttack}/{cd.permanentHealth})] ");
+                sb.Append($"[{i}:{cd.unitData.unitName} {cd.currentAttack}/{cd.currentHealth} ({cd.permanentAttack}/{cd.permanentHealth})] ");
             }
+            i++;
         }
         sb.AppendLine();
 
         sb.Append($"Hand ({playerHand.childCount}): ");
+        i = 0;
         foreach(Transform child in playerHand)
         {
             CardDisplay cd = child.GetComponent<CardDisplay>();
-            if (cd != null) sb.Append($"[{cd.unitData.unitName}] ");
+            if (cd != null) sb.Append($"[{i}:{cd.unitData.unitName}] ");
+            i++;
         }
         sb.AppendLine();
 
@@ -306,10 +172,165 @@ public class GameManager : MonoBehaviour
             display.LoadUnit(data);
             display.isPurchased = true; 
             
+            // OnPlay triggers here for auto-spawns at start of game
             if (AbilityManager.instance != null)
                 AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnPlay, display);
 
             CheckForTriples(data);
+        }
+    }
+
+    public void SpawnToken(UnitData data, Transform parent)
+    {
+        TrySpawnUnit(data, AbilitySpawnLocation.BoardOnly, parent); 
+    }
+
+    public bool TrySpawnUnit(UnitData data, AbilitySpawnLocation location, Transform specificTargetParent = null)
+    {
+        if (data == null || cardPrefab == null) return false;
+
+        Transform targetParent = null;
+
+        switch (location)
+        {
+            case AbilitySpawnLocation.BoardOnly:
+                // Check specific parent first (e.g. Enemy Board)
+                if (specificTargetParent != null)
+                {
+                    if (specificTargetParent.childCount < 7) 
+                        targetParent = specificTargetParent;
+                }
+                else
+                {
+                    // Default to player board
+                    if (playerBoard.childCount < 7) 
+                        targetParent = playerBoard;
+                }
+                break;
+
+            case AbilitySpawnLocation.HandOnly:
+                if (playerHand.childCount < 7) targetParent = playerHand;
+                break;
+
+            case AbilitySpawnLocation.BoardThenHand:
+                if (playerBoard.childCount < 7) targetParent = playerBoard;
+                else if (playerHand.childCount < 7) targetParent = playerHand;
+                break;
+                
+            case AbilitySpawnLocation.ReplaceTarget:
+                if (specificTargetParent != null) targetParent = specificTargetParent;
+                break;
+        }
+
+        if (targetParent == null) 
+        {
+            Debug.Log("Spawn Failed: No Space!");
+            return false;
+        }
+
+        GameObject newCard = Instantiate(cardPrefab, targetParent);
+        CardDisplay display = newCard.GetComponent<CardDisplay>();
+        
+        if (display != null)
+        {
+            display.LoadUnit(data);
+            display.isPurchased = true; // Tokens are owned
+            
+            // Only trigger OnPlay if it's the Player's board AND we are in Recruit Phase
+            // This prevents Battlecries from firing for tokens spawned during Combat
+            if (targetParent == playerBoard)
+            {
+                if (currentPhase == GamePhase.Recruit)
+                {
+                    if (AbilityManager.instance != null)
+                    {
+                        AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnPlay, display);
+                    }
+                }
+                
+                // Always recalc Auras for new units (visuals)
+                if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
+            }
+            else if (targetParent != playerHand)
+            {
+                 // Ensure visual refresh for Enemy/Other boards
+                 if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
+            }
+            
+            // Don't merge triples during combat
+            if (currentPhase == GamePhase.Recruit)
+                CheckForTriples(data);
+            
+            return true;
+        }
+        return false;
+    }
+
+    public void StartAbilityTargeting(AbilityData ability)
+    {
+        if (ability == null) return;
+
+        isTargetingMode = true;
+        pendingAbility = ability;
+        
+        Debug.Log($"<color=cyan>Select a target for {ability.name}...</color>");
+        
+        if (targetingCursor != null)
+        {
+            Cursor.SetCursor(targetingCursor, hotSpot, cursorMode);
+        }
+    }
+
+    public void OnUnitClicked(CardDisplay targetUnit)
+    {
+        if (!isTargetingMode || pendingAbility == null) return;
+
+        AbilityManager.instance.CastTargetedAbility(pendingAbility, targetUnit);
+        
+        if (pendingAbility == activeHero.powerAbility)
+        {
+            heroPowerUsed = true;
+            UpdateUI();
+        }
+
+        CancelTargeting();
+    }
+
+    public void CancelTargeting()
+    {
+        isTargetingMode = false;
+        pendingAbility = null;
+        Cursor.SetCursor(null, Vector2.zero, cursorMode); 
+    }
+
+    public void OnHeroPowerClick()
+    {
+        if (currentPhase != GamePhase.Recruit || isUnconscious) return;
+        if (heroPowerUsed) 
+        {
+            Debug.Log("Hero Power already used this turn!");
+            return;
+        }
+        if (activeHero == null || activeHero.powerAbility == null) return;
+
+        if (gold < activeHero.powerCost)
+        {
+            Debug.Log("Not enough Gold!");
+            return;
+        }
+
+        if (activeHero.powerAbility.targetType == AbilityTarget.SelectTarget)
+        {
+            StartAbilityTargeting(activeHero.powerAbility);
+        }
+        else
+        {
+            if (TrySpendGold(activeHero.powerCost))
+            {
+                heroPowerUsed = true;
+                AbilityManager.instance.CastHeroPower(activeHero.powerAbility);
+                UpdateUI();
+            }
         }
     }
 
@@ -326,6 +347,7 @@ public class GameManager : MonoBehaviour
 
         sourceCard.transform.SetParent(playerHand);
         sourceCard.isPurchased = true;
+        LogAction($"Bought {data.unitName} to Hand");
         CheckForTriples(data); 
         return true;
     }
@@ -339,6 +361,7 @@ public class GameManager : MonoBehaviour
         }
 
         card.transform.SetParent(playerBoard);
+        LogAction($"Played {card.unitData.unitName} to Board");
         
         if (AbilityManager.instance != null)
         {
@@ -372,7 +395,7 @@ public class GameManager : MonoBehaviour
     {
         if (unitToSell == null || currentPhase != GamePhase.Recruit) return;
 
-        Debug.Log($"Selling {unitToSell.unitData.unitName}");
+        LogAction($"Sold {unitToSell.unitData.unitName}");
         gold += 1;
         Destroy(unitToSell.gameObject);
         
@@ -408,7 +431,7 @@ public class GameManager : MonoBehaviour
 
         if (matches.Count >= 3)
         {
-            Debug.Log($"TRIPLE FOUND for {unitData.unitName}! Merging...");
+            LogAction($"TRIPLE FOUND for {unitData.unitName}! Merging...");
             
             int totalBonusAttack = 0;
             int totalBonusHealth = 0;
@@ -416,8 +439,12 @@ public class GameManager : MonoBehaviour
             for(int i=0; i<3; i++)
             {
                 CardDisplay c = matches[i];
-                int atkBonus = c.permanentAttack - c.unitData.baseAttack;
-                int hpBonus = c.permanentHealth - c.unitData.baseHealth;
+                // Clamp bonuses to 0 so we don't accidentally subtract stats if unit was debuffed
+                int atkBonus = Mathf.Max(0, c.permanentAttack - c.unitData.baseAttack);
+                int hpBonus = Mathf.Max(0, c.permanentHealth - c.unitData.baseHealth);
+                
+                Debug.Log($"Consuming {c.unitData.unitName}: Perm({c.permanentAttack}/{c.permanentHealth}) - Base({c.unitData.baseAttack}/{c.unitData.baseHealth}) = Bonus({atkBonus}/{hpBonus})");
+
                 totalBonusAttack += atkBonus;
                 totalBonusHealth += hpBonus;
                 Destroy(c.gameObject);
@@ -434,6 +461,8 @@ public class GameManager : MonoBehaviour
             goldenDisplay.permanentAttack += totalBonusAttack;
             goldenDisplay.permanentHealth += totalBonusHealth;
             
+            Debug.Log($"Created Golden {unitData.unitName} with {goldenDisplay.permanentAttack}/{goldenDisplay.permanentHealth} (Base*2 + {totalBonusAttack}/{totalBonusHealth})");
+
             goldenDisplay.ResetToPermanent();
             goldenDisplay.UpdateVisuals();
             
@@ -461,6 +490,12 @@ public class GameManager : MonoBehaviour
         {
             string status = heroPowerUsed ? "(Used)" : $"(2g)";
             heroText.text = $"{activeHero.heroName} Power: {activeHero.powerName} {status}";
+        }
+
+        if (tierText != null)
+        {
+             ShopManager shop = FindFirstObjectByType<ShopManager>();
+             if (shop != null) tierText.text = $"Tier: {shop.tavernTier}";
         }
     }
 }
