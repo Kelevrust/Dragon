@@ -3,6 +3,7 @@ using TMPro;
 using System.Collections.Generic;
 using UnityEngine.UI; 
 using System.Text; 
+using UnityEngine.SceneManagement; // Required for loading Main Menu
 
 public class GameManager : MonoBehaviour
 {
@@ -43,6 +44,10 @@ public class GameManager : MonoBehaviour
     public CardDisplay selectedUnit; 
     public GameObject sellButton; 
 
+    [Header("In-Game Menu")]
+    public GameObject pauseMenuPanel; 
+    private bool isPaused = false;
+
     public enum GamePhase { Recruit, Combat }
     public GamePhase currentPhase;
 
@@ -57,6 +62,9 @@ public class GameManager : MonoBehaviour
         ApplyHeroBonuses();
         StartRecruitPhase();
         
+        // Ensure menu is closed at start
+        if (pauseMenuPanel != null) pauseMenuPanel.SetActive(false);
+        
         // ANALYTICS: Track Game Start
         if (AnalyticsManager.instance != null && activeHero != null)
         {
@@ -64,18 +72,77 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    // ... (Update, LogAction, LogGameState remain same) ...
     void Update()
     {
-        if (isTargetingMode)
+        // Handle Escape Key
+        if (Input.GetKeyDown(KeyCode.Escape))
         {
-            if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Escape))
+            if (isTargetingMode)
             {
                 CancelTargeting();
             }
+            else
+            {
+                TogglePauseMenu();
+            }
+        }
+
+        // Right click also cancels targeting
+        if (isTargetingMode && Input.GetMouseButtonDown(1))
+        {
+            CancelTargeting();
         }
     }
 
+    // --- PAUSE MENU FUNCTIONS ---
+
+    public void TogglePauseMenu()
+    {
+        isPaused = !isPaused;
+        if (pauseMenuPanel != null) pauseMenuPanel.SetActive(isPaused);
+        
+        // Optional: Freeze time? Usually not needed for async auto-battlers unless animations are playing
+        // Time.timeScale = isPaused ? 0f : 1f; 
+    }
+
+    // Option 1: Save and Quit (To Main Menu)
+    public void SaveAndQuitToMenu()
+    {
+        // In the future, call a SaveSystem.Save() here
+        Debug.Log("Saving and returning to Main Menu...");
+        Time.timeScale = 1f; // Ensure time is running
+        SceneManager.LoadScene(0); // Assumes MainMenu is at Build Index 0
+    }
+
+    // Option 2: Concede (Triggers Death/Defeat)
+    public void ConcedeGame()
+    {
+        TogglePauseMenu(); // Close menu
+        
+        // Trigger Death Logic directly
+        playerHealth = 0;
+        isUnconscious = true;
+        UpdateUI();
+
+        // This will trigger the Death Screen sequence immediately
+        if (DeathSaveManager.instance != null)
+        {
+            // Skip rolls, just die. Requires DeathSaveManager to have a public Succumb function.
+            DeathSaveManager.instance.SuccumbToDeath(); 
+        }
+    }
+
+    // Option 3: Rage Quit (To Desktop)
+    public void QuitToDesktop()
+    {
+        Debug.Log("Rage Quitting...");
+        Application.Quit();
+        #if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+        #endif
+    }
+
+    // --- LOGGING ---
     public void LogAction(string action)
     {
         Debug.Log($"<color=white>[ACTION]</color> {action}");
@@ -117,7 +184,6 @@ public class GameManager : MonoBehaviour
         Debug.Log(sb.ToString());
     }
 
-    // ... (ApplyHeroBonuses, StartRecruitPhase remain same) ...
     void ApplyHeroBonuses()
     {
         if (activeHero == null) return;
@@ -189,6 +255,8 @@ public class GameManager : MonoBehaviour
 
     public void SpawnToken(UnitData data, Transform parent)
     {
+        // Wrapper for compatibility with old AbilityManager calls
+        // Assumes "Force Spawn" logic
         TrySpawnUnit(data, AbilitySpawnLocation.BoardOnly, parent); 
     }
 
@@ -198,6 +266,7 @@ public class GameManager : MonoBehaviour
 
         Transform targetParent = null;
 
+        // Determine where to put it
         switch (location)
         {
             case AbilitySpawnLocation.BoardOnly:
@@ -208,6 +277,7 @@ public class GameManager : MonoBehaviour
                 }
                 else
                 {
+                    // Default to player board
                     if (playerBoard.childCount < 7) 
                         targetParent = playerBoard;
                 }
@@ -223,39 +293,47 @@ public class GameManager : MonoBehaviour
                 break;
                 
             case AbilitySpawnLocation.ReplaceTarget:
-                if (specificTargetParent != null) targetParent = specificTargetParent;
+                // Only used if we selected a specific target to destroy
+                if (specificTargetParent != null)
+                {
+                    targetParent = specificTargetParent;
+                }
                 break;
         }
 
+        // If no valid parent found (e.g. board full), fail
         if (targetParent == null) 
         {
             Debug.Log("Spawn Failed: No Space!");
             return false;
         }
 
+        // Create the Unit
         GameObject newCard = Instantiate(cardPrefab, targetParent);
         CardDisplay display = newCard.GetComponent<CardDisplay>();
         
         if (display != null)
         {
             display.LoadUnit(data);
-            display.isPurchased = true; 
+            display.isPurchased = true; // Tokens are owned
             
+            // If spawned directly to board, trigger OnPlay
             if (targetParent == playerBoard)
             {
-                if (currentPhase == GamePhase.Recruit)
+                if (AbilityManager.instance != null)
                 {
-                    if (AbilityManager.instance != null)
-                        AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnPlay, display);
+                    AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnPlay, display);
+                    AbilityManager.instance.RecalculateAuras();
                 }
-                
-                if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
             }
+            // For enemy tokens, we might need visual updates but not full OnPlay logic yet
             else if (targetParent != playerHand)
             {
+                 // Ensure visual refresh for Enemy/Other boards
                  if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
             }
             
+            // Don't merge triples during combat
             if (currentPhase == GamePhase.Recruit)
                 CheckForTriples(data);
             
@@ -264,21 +342,35 @@ public class GameManager : MonoBehaviour
         return false;
     }
 
-    // --- TARGETING (Keep Existing) ---
+    // --- TARGETING SYSTEM ---
+
     public void StartAbilityTargeting(AbilityData ability)
     {
         if (ability == null) return;
+
         isTargetingMode = true;
         pendingAbility = ability;
+        
         Debug.Log($"<color=cyan>Select a target for {ability.name}...</color>");
-        if (targetingCursor != null) Cursor.SetCursor(targetingCursor, hotSpot, cursorMode);
+        
+        if (targetingCursor != null)
+        {
+            Cursor.SetCursor(targetingCursor, hotSpot, cursorMode);
+        }
     }
 
     public void OnUnitClicked(CardDisplay targetUnit)
     {
         if (!isTargetingMode || pendingAbility == null) return;
+
         AbilityManager.instance.CastTargetedAbility(pendingAbility, targetUnit);
-        if (pendingAbility == activeHero.powerAbility) { heroPowerUsed = true; UpdateUI(); }
+        
+        if (pendingAbility == activeHero.powerAbility)
+        {
+            heroPowerUsed = true;
+            UpdateUI();
+        }
+
         CancelTargeting();
     }
 
@@ -305,6 +397,7 @@ public class GameManager : MonoBehaviour
             return;
         }
 
+        // Logic: If target is "Select", start mode. Else cast immediately.
         if (activeHero.powerAbility.targetType == AbilityTarget.SelectTarget)
         {
             StartAbilityTargeting(activeHero.powerAbility);
@@ -319,8 +412,6 @@ public class GameManager : MonoBehaviour
             }
         }
     }
-
-    // --- PURCHASE LOGIC (Analytics Added) ---
 
     public bool TryBuyToHand(UnitData data, CardDisplay sourceCard)
     {
@@ -337,15 +428,12 @@ public class GameManager : MonoBehaviour
         sourceCard.isPurchased = true;
         LogAction($"Bought {data.unitName} to Hand");
         
-        // ANALYTICS: Track Purchase
         if (AnalyticsManager.instance != null)
             AnalyticsManager.instance.TrackPurchase(data.unitName, data.cost);
 
         CheckForTriples(data); 
         return true;
     }
-
-    // ... (TryPlayCardToBoard, SelectUnit, DeselectUnit, SellUnit etc. remain same) ...
 
     public bool TryPlayCardToBoard(CardDisplay card)
     {
@@ -375,6 +463,7 @@ public class GameManager : MonoBehaviour
             OnUnitClicked(unit);
             return;
         }
+
         if (currentPhase != GamePhase.Recruit || isUnconscious) return;
         selectedUnit = unit;
         Debug.Log($"Selected {unit.unitData.unitName}");
@@ -394,6 +483,7 @@ public class GameManager : MonoBehaviour
         Destroy(unitToSell.gameObject);
         
         if (selectedUnit == unitToSell) DeselectUnit();
+        
         if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras(); 
         UpdateUI();
     }
@@ -432,8 +522,12 @@ public class GameManager : MonoBehaviour
             for(int i=0; i<3; i++)
             {
                 CardDisplay c = matches[i];
+                // Clamp bonuses to 0 so we don't accidentally subtract stats if unit was debuffed
                 int atkBonus = Mathf.Max(0, c.permanentAttack - c.unitData.baseAttack);
                 int hpBonus = Mathf.Max(0, c.permanentHealth - c.unitData.baseHealth);
+                
+                Debug.Log($"Consuming {c.unitData.unitName}: Perm({c.permanentAttack}/{c.permanentHealth}) - Base({c.unitData.baseAttack}/{c.unitData.baseHealth}) = Bonus({atkBonus}/{hpBonus})");
+
                 totalBonusAttack += atkBonus;
                 totalBonusHealth += hpBonus;
                 Destroy(c.gameObject);
@@ -450,6 +544,8 @@ public class GameManager : MonoBehaviour
             goldenDisplay.permanentAttack += totalBonusAttack;
             goldenDisplay.permanentHealth += totalBonusHealth;
             
+            Debug.Log($"Created Golden {unitData.unitName} with {goldenDisplay.permanentAttack}/{goldenDisplay.permanentHealth} (Base*2 + {totalBonusAttack}/{totalBonusHealth})");
+
             goldenDisplay.ResetToPermanent();
             goldenDisplay.UpdateVisuals();
             
@@ -462,13 +558,12 @@ public class GameManager : MonoBehaviour
         playerHealth += amount;
         if (playerHealth > maxPlayerHealth) playerHealth = maxPlayerHealth;
         
-        // ANALYTICS: Check Death
         if (playerHealth <= 0 && amount < 0)
         {
             if (AnalyticsManager.instance != null) 
                 AnalyticsManager.instance.TrackDeath(turnNumber);
         }
-        
+
         UpdateUI();
     }
 
@@ -486,6 +581,7 @@ public class GameManager : MonoBehaviour
             string status = heroPowerUsed ? "(Used)" : $"(2g)";
             heroText.text = $"{activeHero.heroName} Power: {activeHero.powerName} {status}";
         }
+
         if (tierText != null)
         {
              ShopManager shop = FindFirstObjectByType<ShopManager>();

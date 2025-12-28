@@ -24,7 +24,7 @@ MonoBehaviour:
   hasReborn: 0
   tribe: 1
   abilities:
-  - {fileID: 11400000, guid: 2fb4186a50eb59348a3494659b6b88a2, type: 2}
+  - {fileID: 11400000, guid: 1e7936a6d85541847b83f99efb0f1bcc, type: 2}
   artwork: {fileID: 10913, guid: 0000000000000000f000000000000000, type: 0}
   frameColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   unitModelPrefab: {fileID: 0}

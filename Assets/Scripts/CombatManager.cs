@@ -13,6 +13,7 @@ public class CombatManager : MonoBehaviour
     [Tooltip("Time to wait before returning to shop.")]
     public float shopReturnDelay = 1.0f;
 
+    // --- NEW: AUDIO FX HEADER ---
     [Header("Audio FX")]
     public AudioClip combatStartClip;
     public AudioClip attackClip;
@@ -59,7 +60,7 @@ public class CombatManager : MonoBehaviour
         SaveRoster();
         GameManager.instance.currentPhase = GameManager.GamePhase.Combat;
         
-        // NEW: PvP Lobby Logic
+        // PvP Lobby Logic
         if (LobbyManager.instance != null)
         {
             var opponent = LobbyManager.instance.GetNextOpponent();
@@ -194,9 +195,19 @@ public class CombatManager : MonoBehaviour
         // SFX: Death
         if (AudioManager.instance != null) AudioManager.instance.PlaySFX(deathClip);
 
+        // 1. Capture the board reference BEFORE moving the unit
+        Transform oldBoard = unit.transform.parent;
+
         if (AbilityManager.instance != null)
         {
-            try { AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnDeath, unit); }
+            try 
+            { 
+                // A. Trigger Self Deathrattle
+                AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnDeath, unit, oldBoard); 
+                
+                // B. Trigger Ally "OnAllyDeath" Abilities
+                AbilityManager.instance.TriggerAllyDeathAbilities(unit, oldBoard);
+            }
             catch (System.Exception e) { Debug.LogError($"Deathrattle error: {e.Message}"); }
         }
 
@@ -259,22 +270,19 @@ public class CombatManager : MonoBehaviour
             if (AudioManager.instance != null) AudioManager.instance.PlaySFX(victoryClip);
         }
         
-        // ANALYTICS & LOGGING
         if (AnalyticsManager.instance != null)
             AnalyticsManager.instance.TrackRoundResult(GameManager.instance.turnNumber, playerWon, damageTaken, GameManager.instance.playerHealth);
         GameManager.instance.LogGameState($"Post-Combat (Damage: {damageTaken})");
 
-        // NEW: LOBBY & BOT UPDATES
         if (LobbyManager.instance != null)
         {
             int damageDealt = 0;
             if (playerWon)
             {
-                damageDealt = 1; // Base Damage
+                damageDealt = 1; 
                 List<CardDisplay> survivors = GetUnits(playerBoard);
                 foreach(var s in survivors) damageDealt += s.unitData.tier;
             }
-            
             LobbyManager.instance.ReportPlayerVsBotResult(playerWon, damageDealt);
             LobbyManager.instance.SimulateRoundForBots(GameManager.instance.turnNumber);
         }

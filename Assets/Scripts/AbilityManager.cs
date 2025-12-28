@@ -22,6 +22,22 @@ public class AbilityManager : MonoBehaviour
         }
     }
 
+    // --- FIX: MISSING METHOD RESTORED ---
+    public void TriggerAllyDeathAbilities(CardDisplay deadUnit, Transform board)
+    {
+        if (board == null) return;
+
+        foreach(Transform child in board)
+        {
+            CardDisplay ally = child.GetComponent<CardDisplay>();
+            // Must be active, not the dead unit, and have abilities
+            if (ally != null && ally != deadUnit && ally.gameObject.activeInHierarchy)
+            {
+                TriggerAbilities(AbilityTrigger.OnAllyDeath, ally, board);
+            }
+        }
+    }
+
     public void CastHeroPower(AbilityData ability)
     {
         if (ability == null) return;
@@ -77,10 +93,6 @@ public class AbilityManager : MonoBehaviour
     void ExecuteAbility(AbilityData ability, CardDisplay source, CardDisplay specificTarget, Transform overrideBoard)
     {
         if (ability == null) return;
-        
-        // Debug Log restored for clarity
-        string sourceName = source != null ? source.unitData.unitName : "Hero";
-        Debug.Log($"Executing Ability: {ability.name} from {sourceName}");
 
         List<CardDisplay> targets = FindTargets(ability, source, overrideBoard);
 
@@ -107,7 +119,7 @@ public class AbilityManager : MonoBehaviour
     {
         if (ability == null) return;
 
-        // --- VISUALS & AUDIO ---
+        // Visuals
         PlayVFX(ability, target, source);
         PlaySound(ability);
 
@@ -189,7 +201,6 @@ public class AbilityManager : MonoBehaviour
         }
     }
 
-    // --- NEW VFX LOGIC ---
     void PlayVFX(AbilityData ability, CardDisplay target, CardDisplay source)
     {
         if (ability.vfxPrefab == null) return;
@@ -206,15 +217,12 @@ public class AbilityManager : MonoBehaviour
                 else if (source != null) spawnPos = source.transform.position;
                 break;
             case VFXSpawnPoint.CenterOfBoard:
-                // Rough center of screen
                 spawnPos = new Vector3(Screen.width/2f, Screen.height/2f, 0f);
                 break;
         }
 
-        // FIX: Pull the effect closer to camera (-Z) so it renders ON TOP of the Canvas
-        spawnPos.z -= 10f;
+        spawnPos.z -= 10f; // Sort above canvas
 
-        Debug.Log($"Spawning VFX {ability.vfxPrefab.name} at {spawnPos}");
         GameObject vfx = Instantiate(ability.vfxPrefab, spawnPos, Quaternion.identity);
         Destroy(vfx, ability.vfxDuration);
     }
@@ -247,6 +255,7 @@ public class AbilityManager : MonoBehaviour
             if(cd != null && cd.gameObject.activeInHierarchy) allies.Add(cd);
         }
 
+        // Include source for "AllFriendly"
         if (source != null && !allies.Contains(source) && source.transform.parent == board)
         {
             allies.Add(source);
