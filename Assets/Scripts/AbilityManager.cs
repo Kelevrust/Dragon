@@ -7,7 +7,6 @@ public class AbilityManager : MonoBehaviour
 
     void Awake() { instance = this; }
 
-    // UPDATED: Added optional overrideBoard for Deathrattles
     public void TriggerAbilities(AbilityTrigger trigger, CardDisplay sourceCard, Transform overrideBoard = null)
     {
         if (sourceCard == null) return;
@@ -78,6 +77,10 @@ public class AbilityManager : MonoBehaviour
     void ExecuteAbility(AbilityData ability, CardDisplay source, CardDisplay specificTarget, Transform overrideBoard)
     {
         if (ability == null) return;
+        
+        // Debug Log restored for clarity
+        string sourceName = source != null ? source.unitData.unitName : "Hero";
+        Debug.Log($"Executing Ability: {ability.name} from {sourceName}");
 
         List<CardDisplay> targets = FindTargets(ability, source, overrideBoard);
 
@@ -87,7 +90,7 @@ public class AbilityManager : MonoBehaviour
             targets.Add(specificTarget);
         }
 
-        if (targets.Count == 0 && (ability.targetType == AbilityTarget.None || ability.targetType == AbilityTarget.Self || ability.effectType == AbilityEffect.SummonUnit || ability.effectType == AbilityEffect.HealHero))
+        if (targets.Count == 0 && (ability.targetType == AbilityTarget.None || ability.targetType == AbilityTarget.Self || ability.effectType == AbilityEffect.SummonUnit || ability.effectType == AbilityEffect.HealHero || ability.effectType == AbilityEffect.ReduceUpgradeCost))
         {
             ApplyEffect(ability, null, source, overrideBoard); 
         }
@@ -104,6 +107,10 @@ public class AbilityManager : MonoBehaviour
     {
         if (ability == null) return;
 
+        // --- VISUALS & AUDIO ---
+        PlayVFX(ability, target, source);
+        PlaySound(ability);
+
         bool isSourceGolden = source != null && source.isGolden;
 
         switch (ability.effectType)
@@ -114,7 +121,6 @@ public class AbilityManager : MonoBehaviour
                     int atk = ability.valueX;
                     int hp = ability.valueY;
 
-                    // FIX: Apply Golden Multiplier to ALL buff effects (Battlecries AND Auras)
                     if (isSourceGolden)
                     {
                         atk *= 2;
@@ -145,9 +151,6 @@ public class AbilityManager : MonoBehaviour
 
                 if (spawnParent != null && GameManager.instance != null)
                 {
-                    // Golden Summon Logic: Spawn a Golden Token?
-                    // For now, let's keep standard logic, but in future, you might want to 
-                    // create a "Golden Token" version if isSourceGolden is true.
                     GameManager.instance.SpawnToken(ability.tokenUnit, spawnParent);
                     RecalculateAuras();
                 }
@@ -156,10 +159,8 @@ public class AbilityManager : MonoBehaviour
             case AbilityEffect.GainGold:
                 if (GameManager.instance != null)
                 {
-                    // Golden economy units give double gold
                     int amount = ability.valueX;
                     if (isSourceGolden) amount *= 2;
-
                     GameManager.instance.gold += amount;
                     GameManager.instance.UpdateUI();
                 }
@@ -170,10 +171,59 @@ public class AbilityManager : MonoBehaviour
                 {
                     int amount = ability.valueX;
                     if (isSourceGolden) amount *= 2;
-                    
                     GameManager.instance.ModifyHealth(amount);
                 }
                 break;
+
+            case AbilityEffect.ReduceUpgradeCost:
+                ShopManager shop = FindFirstObjectByType<ShopManager>();
+                if (shop != null)
+                {
+                    int amount = ability.valueX;
+                    if (isSourceGolden) amount *= 2;
+                    
+                    shop.currentDiscount += amount;
+                    Debug.Log($"Upgrade cost reduced by {amount}");
+                }
+                break;
+        }
+    }
+
+    // --- NEW VFX LOGIC ---
+    void PlayVFX(AbilityData ability, CardDisplay target, CardDisplay source)
+    {
+        if (ability.vfxPrefab == null) return;
+
+        Vector3 spawnPos = Vector3.zero;
+
+        switch (ability.vfxSpawnPoint)
+        {
+            case VFXSpawnPoint.Source:
+                if (source != null) spawnPos = source.transform.position;
+                break;
+            case VFXSpawnPoint.Target:
+                if (target != null) spawnPos = target.transform.position;
+                else if (source != null) spawnPos = source.transform.position;
+                break;
+            case VFXSpawnPoint.CenterOfBoard:
+                // Rough center of screen
+                spawnPos = new Vector3(Screen.width/2f, Screen.height/2f, 0f);
+                break;
+        }
+
+        // FIX: Pull the effect closer to camera (-Z) so it renders ON TOP of the Canvas
+        spawnPos.z -= 10f;
+
+        Debug.Log($"Spawning VFX {ability.vfxPrefab.name} at {spawnPos}");
+        GameObject vfx = Instantiate(ability.vfxPrefab, spawnPos, Quaternion.identity);
+        Destroy(vfx, ability.vfxDuration);
+    }
+
+    void PlaySound(AbilityData ability)
+    {
+        if (ability.soundEffect != null)
+        {
+            AudioSource.PlayClipAtPoint(ability.soundEffect, Vector3.zero);
         }
     }
 

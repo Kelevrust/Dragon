@@ -12,8 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f939aad67108ef74b9bc26b9d4d97274, type: 3}
   m_Name: GraveRobber
   m_EditorClassIdentifier: Assembly-CSharp::AbilityData
-  triggerType: 1
-  targetType: 5
+  triggerType: 6
+  targetType: 1
   targetTribe: 0
   effectType: 0
   valueX: 1

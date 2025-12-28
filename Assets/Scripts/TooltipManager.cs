@@ -20,7 +20,6 @@ public class TooltipManager : MonoBehaviour
     [Header("Layout")]
     public RectTransform rootRect;      
     
-    // NEW: Track the card we are hovering over
     private CardDisplay currentTarget;
 
     void Awake()
@@ -31,12 +30,11 @@ public class TooltipManager : MonoBehaviour
 
     void Start()
     {
-        // FIX: Ensure the tooltip UI ignores the mouse to prevent flickering
         if (tooltipRoot != null)
         {
             CanvasGroup cg = tooltipRoot.GetComponent<CanvasGroup>();
             if (cg == null) cg = tooltipRoot.AddComponent<CanvasGroup>();
-            cg.blocksRaycasts = false; // Mouse passes through to card below
+            cg.blocksRaycasts = false; 
             cg.interactable = false;
         }
 
@@ -53,21 +51,20 @@ public class TooltipManager : MonoBehaviour
 
     private void UpdatePosition()
     {
-        // 1. Get Card Position (Screen Space)
+        Vector2 mousePos = Vector2.zero;
+        if (Mouse.current != null)
+        {
+            mousePos = Mouse.current.position.ReadValue();
+        }
+
+        // FIX: Define targetPos BEFORE checking if it's on the left
         Vector3 targetPos = currentTarget.transform.position;
-        
-        // 2. Determine Side (Left vs Right of screen center)
+
         float screenCenterX = Screen.width / 2f;
         bool cardIsOnLeft = targetPos.x < screenCenterX;
-
-        // 3. Set Pivot to flip direction
-        // If card is on Left, Pivot = (0, 0.5) -> Tooltip grows to Right
-        // If card is on Right, Pivot = (1, 0.5) -> Tooltip grows to Left
-        // We add a slight offset to X so it doesn't overlap the card directly
+        
         float pivotX = cardIsOnLeft ? -0.1f : 1.1f; 
         rootRect.pivot = new Vector2(pivotX, 0.5f);
-        
-        // 4. Apply Position to the VISUAL root (not just this manager object)
         rootRect.position = targetPos;
     }
 
@@ -77,10 +74,7 @@ public class TooltipManager : MonoBehaviour
 
         currentTarget = sourceCard;
 
-        // Copy Data
         bigCardVisual.LoadUnit(sourceCard.unitData);
-        
-        // Copy Stats
         bigCardVisual.currentAttack = sourceCard.currentAttack;
         bigCardVisual.currentHealth = sourceCard.currentHealth;
         bigCardVisual.permanentAttack = sourceCard.permanentAttack;
@@ -88,13 +82,10 @@ public class TooltipManager : MonoBehaviour
         bigCardVisual.isGolden = sourceCard.isGolden;
         bigCardVisual.UpdateVisuals();
 
-        // Buffs
         RefreshBuffList(sourceCard);
 
         tooltipRoot.SetActive(true);
         
-        // FORCE LAYOUT REBUILD: Fixes the "Squashed Text" or "Vertical Line" bug
-        // Unity UI ContentSizeFitter sometimes lags by one frame unless forced.
         LayoutRebuilder.ForceRebuildLayoutImmediate(rootRect);
         if (buffContainer != null) LayoutRebuilder.ForceRebuildLayoutImmediate(buffContainer.GetComponent<RectTransform>());
 
@@ -119,7 +110,6 @@ public class TooltipManager : MonoBehaviour
             hasBuffs = true;
         }
 
-        // Show/Hide the buff panel based on content
         buffContainer.SetActive(hasBuffs);
         if (buffPanelBackground != null) 
         {
@@ -135,8 +125,7 @@ public class TooltipManager : MonoBehaviour
         t.text = text;
         t.color = color;
         
-        // Ensure text settings are correct for layout
-        t.enableWordWrapping = true; // Allow wrapping if too long
+        t.textWrappingMode = TextWrappingModes.Normal; 
         t.alignment = TextAlignmentOptions.Left;
     }
 

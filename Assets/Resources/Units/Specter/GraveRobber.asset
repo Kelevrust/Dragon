@@ -13,12 +13,15 @@ MonoBehaviour:
   m_Name: GraveRobber
   m_EditorClassIdentifier: Assembly-CSharp::UnitData
   id: 
-  unitName: Skeleton
+  unitName: Grave Robber
   description: 
   tier: 1
   cost: 3
   baseAttack: 2
   baseHealth: 4
+  hasTaunt: 0
+  hasDivineShield: 0
+  hasReborn: 0
   tribe: 2
   abilities:
   - {fileID: 11400000, guid: 1c8565397a2f979418a5d88c7424f41f, type: 2}

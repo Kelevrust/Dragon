@@ -171,7 +171,26 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         if (GameManager.instance.currentPhase != GameManager.GamePhase.Recruit || GameManager.instance.isUnconscious) 
             return;
             
-        transform.position = eventData.position;
+        // FIX: Convert Screen Point (Mouse) to World Point (Canvas)
+        // This works for Screen Space - Overlay AND Screen Space - Camera
+        if (canvasTransform != null)
+        {
+            Vector2 localPoint;
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                (RectTransform)canvasTransform, 
+                eventData.position, 
+                GetComponentInParent<Canvas>().worldCamera, 
+                out localPoint
+            );
+            
+            // Apply the converted position
+            transform.position = canvasTransform.TransformPoint(localPoint);
+        }
+        else
+        {
+            // Fallback (Old way)
+            transform.position = eventData.position;
+        }
     }
 
     public void OnEndDrag(PointerEventData eventData)

@@ -13,12 +13,15 @@ MonoBehaviour:
   m_Name: AlphaWolf
   m_EditorClassIdentifier: Assembly-CSharp::UnitData
   id: 
-  unitName: Dire Wolf
+  unitName: Alpha Wolf
   description: 
   tier: 1
   cost: 3
   baseAttack: 3
   baseHealth: 3
+  hasTaunt: 0
+  hasDivineShield: 0
+  hasReborn: 0
   tribe: 3
   abilities:
   - {fileID: 11400000, guid: ebe0cdee7e8f14b45a2b8e66fd91b8be, type: 2}

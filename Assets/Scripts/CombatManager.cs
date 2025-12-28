@@ -8,8 +8,18 @@ public class CombatManager : MonoBehaviour
     public static CombatManager instance;
 
     [Header("Game Pace")]
+    [Tooltip("Time between attacks. Lower is faster.")]
     public float combatPace = 0.5f; 
+    [Tooltip("Time to wait before returning to shop.")]
     public float shopReturnDelay = 1.0f;
+
+    [Header("Audio FX")]
+    public AudioClip combatStartClip;
+    public AudioClip attackClip;
+    public AudioClip hitClip;
+    public AudioClip deathClip;
+    public AudioClip victoryClip;
+    public AudioClip defeatClip;
 
     [Header("References")]
     public Transform playerBoard;
@@ -26,8 +36,6 @@ public class CombatManager : MonoBehaviour
         public int permAttack;
         public int permHealth;
         public bool wasInHand; 
-        // Note: We don't save Reborn/Shield states for next round (they reset), 
-        // unless you want persistent broken shields? Standard is reset.
     }
 
     private List<SavedUnit> savedPlayerRoster = new List<SavedUnit>();
@@ -50,6 +58,17 @@ public class CombatManager : MonoBehaviour
         
         SaveRoster();
         GameManager.instance.currentPhase = GameManager.GamePhase.Combat;
+        
+        // NEW: PvP Lobby Logic
+        if (LobbyManager.instance != null)
+        {
+            var opponent = LobbyManager.instance.GetNextOpponent();
+            if (opponent != null) Debug.Log($"<color=orange>Fighting Opponent: {opponent.name}</color>");
+        }
+
+        // SFX
+        if (AudioManager.instance != null) AudioManager.instance.PlaySFX(combatStartClip);
+
         SpawnEnemies(); 
         StartCoroutine(CombatRoutine());
     }
@@ -76,6 +95,8 @@ public class CombatManager : MonoBehaviour
             snap.permHealth = cd.permanentHealth;
             snap.wasInHand = inHand;
             savedPlayerRoster.Add(snap);
+
+            if (snap.isGolden) Debug.Log($"Saving GOLDEN status for {snap.template.unitName} (In Hand: {inHand})");
         }
     }
 
@@ -103,9 +124,11 @@ public class CombatManager : MonoBehaviour
         List<CardDisplay> players = GetUnits(playerBoard);
         List<CardDisplay> enemies = GetUnits(enemyBoard);
 
-        // SYNC STARTING STATS to CardDisplay internal trackers
-        // We will rely on CardDisplay.currentHealth/Attack for the source of truth
-        // instead of a local Dictionary, because CardDisplay handles Divine Shield logic.
+        Dictionary<CardDisplay, int> combatHealths = new Dictionary<CardDisplay, int>();
+        Dictionary<CardDisplay, int> combatAttacks = new Dictionary<CardDisplay, int>();
+
+        foreach (var p in players) { combatHealths[p] = p.currentHealth; combatAttacks[p] = p.currentAttack; }
+        foreach (var e in enemies) { combatHealths[e] = e.currentHealth; combatAttacks[e] = e.currentAttack; }
 
         while (players.Count > 0 && enemies.Count > 0)
         {
@@ -113,38 +136,36 @@ public class CombatManager : MonoBehaviour
             enemies = GetUnits(enemyBoard);
             if (players.Count == 0 || enemies.Count == 0) break;
 
-            // 1. Pick Attacker (Leftmost)
-            CardDisplay pAttacker = players[0];
-            CardDisplay eAttacker = enemies[0];
+            CardDisplay pUnit = players[0];
+            CardDisplay eUnit = enemies[0];
 
-            // 2. Pick Targets (Handle TAUNT)
-            CardDisplay pTarget = GetTarget(pAttacker, enemies); // Player unit attacks Enemy unit
-            CardDisplay eTarget = GetTarget(eAttacker, players); // Enemy unit attacks Player unit
+            if (!combatHealths.ContainsKey(pUnit)) { combatHealths[pUnit] = pUnit.currentHealth; combatAttacks[pUnit] = pUnit.currentAttack; }
+            if (!combatHealths.ContainsKey(eUnit)) { combatHealths[eUnit] = eUnit.currentHealth; combatAttacks[eUnit] = eUnit.currentAttack; }
 
-            // 3. Animation
-            yield return StartCoroutine(AnimateAttack(pAttacker.transform, pTarget.transform));
-            yield return StartCoroutine(AnimateAttack(eAttacker.transform, eTarget.transform));
+            yield return StartCoroutine(AnimateAttack(pUnit.transform, eUnit.transform));
+            yield return StartCoroutine(AnimateAttack(eUnit.transform, pUnit.transform));
 
-            // 4. Deal Damage
-            // Note: We use the Attacker's attack vs the Target's TakeDamage function
-            int pDmg = eAttacker.currentAttack;
-            int eDmg = pAttacker.currentAttack;
+            // SFX: Hit Impact
+            if (AudioManager.instance != null) AudioManager.instance.PlaySFX(hitClip);
 
-            pTarget.TakeDamage(pDmg); // Enemy hits Player Unit
-            eTarget.TakeDamage(eDmg); // Player hits Enemy Unit
+            int pDmg = combatAttacks[eUnit];
+            int eDmg = combatAttacks[pUnit];
 
-            // 5. Check Deaths
-            bool pDies = pTarget.currentHealth <= 0;
-            bool eDies = eTarget.currentHealth <= 0;
+            combatHealths[pUnit] -= pDmg;
+            combatHealths[eUnit] -= eDmg;
 
-            // Handle Reborn / Death
-            if (eDies) HandleDeath(eTarget, enemies);
-            if (pDies) HandleDeath(pTarget, players);
+            UpdateCombatVisuals(pUnit, combatHealths[pUnit]);
+            UpdateCombatVisuals(eUnit, combatHealths[eUnit]);
+
+            bool pDies = combatHealths[pUnit] <= 0;
+            bool eDies = combatHealths[eUnit] <= 0;
+
+            if (eDies) KillUnit(eUnit, enemies, true);
+            if (pDies) KillUnit(pUnit, players, false);
 
             yield return new WaitForSeconds(combatPace);
         }
 
-        // Damage Calculation
         enemies = GetUnits(enemyBoard);
         players = GetUnits(playerBoard);
         int damageTaken = 0;
@@ -158,45 +179,27 @@ public class CombatManager : MonoBehaviour
         EndCombat(players.Count > 0, damageTaken);
     }
 
-    CardDisplay GetTarget(CardDisplay attacker, List<CardDisplay> defenders)
+    void UpdateCombatVisuals(CardDisplay unit, int currentHp)
     {
-        // Check for Taunt
-        List<CardDisplay> taunts = new List<CardDisplay>();
-        foreach(var d in defenders)
-        {
-            if (d.unitData.hasTaunt) taunts.Add(d);
-        }
-
-        if (taunts.Count > 0)
-        {
-            return taunts[Random.Range(0, taunts.Count)];
-        }
-        
-        // No taunt, random target
-        return defenders[Random.Range(0, defenders.Count)];
+        if (unit.healthText == null) return;
+        unit.healthText.text = currentHp.ToString();
+        int maxHp = unit.isGolden ? unit.unitData.baseHealth * 2 : unit.unitData.baseHealth;
+        if (currentHp < unit.permanentHealth) unit.healthText.color = Color.red;
+        else if (currentHp > maxHp) unit.healthText.color = Color.green;
+        else unit.healthText.color = Color.black;
     }
 
-    void HandleDeath(CardDisplay unit, List<CardDisplay> list)
+    void KillUnit(CardDisplay unit, List<CardDisplay> list, bool isEnemy)
     {
-        // 1. REBORN CHECK
-        if (unit.hasReborn)
-        {
-            Debug.Log($"{unit.unitData.unitName} Reborn!");
-            unit.hasReborn = false; // Consume Reborn
-            unit.currentHealth = 1; // Set HP to 1
-            unit.damageTaken = unit.permanentHealth - 1; // Sync damage tracking
-            unit.UpdateVisuals();
-            return; // SURVIVED!
-        }
+        // SFX: Death
+        if (AudioManager.instance != null) AudioManager.instance.PlaySFX(deathClip);
 
-        // 2. DEATHRATTLES
         if (AbilityManager.instance != null)
         {
             try { AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnDeath, unit); }
             catch (System.Exception e) { Debug.LogError($"Deathrattle error: {e.Message}"); }
         }
 
-        // 3. CLEANUP
         list.Remove(unit);
         if (graveyard != null) unit.transform.SetParent(graveyard);
         unit.gameObject.SetActive(false);
@@ -206,6 +209,10 @@ public class CombatManager : MonoBehaviour
     IEnumerator AnimateAttack(Transform attacker, Transform target)
     {
         if (attacker == null || target == null) yield break;
+        
+        // SFX: Attack Swing
+        if (AudioManager.instance != null) AudioManager.instance.PlaySFX(attackClip);
+
         Vector3 originalPos = attacker.position;
         Vector3 targetPos = target.position;
         float duration = combatPace * 0.2f; 
@@ -242,8 +249,35 @@ public class CombatManager : MonoBehaviour
 
     void EndCombat(bool playerWon, int damageTaken)
     {
-        if (damageTaken > 0) GameManager.instance.ModifyHealth(-damageTaken);
+        if (damageTaken > 0) 
+        {
+            GameManager.instance.ModifyHealth(-damageTaken);
+            if (AudioManager.instance != null) AudioManager.instance.PlaySFX(defeatClip);
+        }
+        else if (playerWon)
+        {
+            if (AudioManager.instance != null) AudioManager.instance.PlaySFX(victoryClip);
+        }
+        
+        // ANALYTICS & LOGGING
+        if (AnalyticsManager.instance != null)
+            AnalyticsManager.instance.TrackRoundResult(GameManager.instance.turnNumber, playerWon, damageTaken, GameManager.instance.playerHealth);
         GameManager.instance.LogGameState($"Post-Combat (Damage: {damageTaken})");
+
+        // NEW: LOBBY & BOT UPDATES
+        if (LobbyManager.instance != null)
+        {
+            int damageDealt = 0;
+            if (playerWon)
+            {
+                damageDealt = 1; // Base Damage
+                List<CardDisplay> survivors = GetUnits(playerBoard);
+                foreach(var s in survivors) damageDealt += s.unitData.tier;
+            }
+            
+            LobbyManager.instance.ReportPlayerVsBotResult(playerWon, damageDealt);
+            LobbyManager.instance.SimulateRoundForBots(GameManager.instance.turnNumber);
+        }
 
         if (GameManager.instance.playerHealth <= 0) DeathSaveManager.instance.StartDeathSequence();
         else StartCoroutine(ReturnToShopRoutine());
@@ -284,7 +318,6 @@ public class CombatManager : MonoBehaviour
         for(int i=0; i<savedPlayerRoster.Count; i++)
         {
             if (i >= spawnedCards.Count) break;
-            
             SavedUnit snap = savedPlayerRoster[i];
             CardDisplay cd = spawnedCards[i];
 

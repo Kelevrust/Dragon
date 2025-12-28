@@ -19,6 +19,9 @@ MonoBehaviour:
   cost: 3
   baseAttack: 2
   baseHealth: 2
+  hasTaunt: 0
+  hasDivineShield: 0
+  hasReborn: 0
   tribe: 4
   abilities:
   - {fileID: 0}

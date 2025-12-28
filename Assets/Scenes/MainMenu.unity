@@ -1971,9 +1971,9 @@ MonoBehaviour:
   quitButton: {fileID: 1849172394}
   audioMixer: {fileID: 0}
   resolutionDropdown: {fileID: 0}
-  qualityDropdown: {fileID: 0}
-  volumeSlider: {fileID: 0}
-  fullscreenToggle: {fileID: 0}
+  qualityDropdown: {fileID: 1307150205}
+  volumeSlider: {fileID: 912759473}
+  fullscreenToggle: {fileID: 715307608}
 --- !u!4 &1182709333
 Transform:
   m_ObjectHideFlags: 0

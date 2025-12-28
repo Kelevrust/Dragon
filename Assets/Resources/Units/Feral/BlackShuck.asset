@@ -13,12 +13,15 @@ MonoBehaviour:
   m_Name: BlackShuck
   m_EditorClassIdentifier: Assembly-CSharp::UnitData
   id: 
-  unitName: Dire Wolf
+  unitName: Black Shuck
   description: 
   tier: 1
   cost: 3
   baseAttack: 3
   baseHealth: 3
+  hasTaunt: 0
+  hasDivineShield: 0
+  hasReborn: 0
   tribe: 3
   abilities:
   - {fileID: 11400000, guid: 3f18c8ed4498682418ab0b5d38f24d5e, type: 2}

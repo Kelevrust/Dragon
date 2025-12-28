@@ -20,4 +20,7 @@ MonoBehaviour:
   valueY: 1
   tokenUnit: {fileID: 0}
   spawnLocation: 0
-  vfxPrefab: {fileID: 0}
+  vfxPrefab: {fileID: 7861736411326896951, guid: 473d97da44c18694c8b42bb176236cf5, type: 3}
+  vfxSpawnPoint: 1
+  vfxDuration: 5
+  soundEffect: {fileID: 0}

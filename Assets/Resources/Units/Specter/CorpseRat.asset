@@ -13,12 +13,15 @@ MonoBehaviour:
   m_Name: CorpseRat
   m_EditorClassIdentifier: Assembly-CSharp::UnitData
   id: 
-  unitName: Skeleton
+  unitName: Corpse Rat
   description: 
   tier: 1
   cost: 3
   baseAttack: 1
   baseHealth: 3
+  hasTaunt: 0
+  hasDivineShield: 0
+  hasReborn: 0
   tribe: 2
   abilities:
   - {fileID: 11400000, guid: 5ebbd636376c38b48ba2589bc1acf547, type: 2}

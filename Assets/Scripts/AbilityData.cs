@@ -2,17 +2,18 @@ using UnityEngine;
 
 public enum AbilityTrigger
 {
-    OnPlay,
-    OnDeath,
-    OnTurnStart,
-    OnDamageTaken,
-    PassiveAura,
-    OnHeroPower
+    OnPlay,         // Battlecry
+    OnDeath,        // Deathrattle
+    OnTurnStart,    // Passive scaling
+    OnDamageTaken,  // Enrage
+    PassiveAura,    // Constant effect
+    OnHeroPower,    // Active button
+    OnAllyDeath     // Scavenge
 }
 
 public enum AbilityTarget
 {
-    None,               // NEW: Instant cast (no target selection needed)
+    None,
     Self,
     RandomFriendly,
     AllFriendly,
@@ -30,16 +31,24 @@ public enum AbilityEffect
     SummonUnit,
     DealDamage,
     HealHero,
-    GainGold
+    GainGold,
+    ReduceUpgradeCost
 }
 
-// NEW: Where should the summoned unit go?
 public enum AbilitySpawnLocation
 {
     BoardOnly,      // If board full, fail
     HandOnly,       // Add to hand
-    BoardThenHand,  // Try board, fallback to hand (Standard Hero Power)
-    ReplaceTarget   // Destroy target, put new unit there (Polymorph/Sacrifice)
+    BoardThenHand,  // Try board, fallback to hand
+    ReplaceTarget   // For polymorph/sacrifice effects
+}
+
+// NEW: Where should the Visual Effect appear?
+public enum VFXSpawnPoint
+{
+    Source,         // On the unit casting the spell (e.g. Roar)
+    Target,         // On the unit receiving the effect (e.g. Explosion)
+    CenterOfBoard   // In the middle of the screen (e.g. Weather effect)
 }
 
 [CreateAssetMenu(fileName = "New Ability", menuName = "DnD Battler/Ability Data")]
@@ -50,6 +59,8 @@ public class AbilityData : ScriptableObject
     
     [Header("Targeting")]
     public AbilityTarget targetType;
+    
+    [Tooltip("Required if targeting by Tribe (e.g. Give all UNDEAD +1/+1)")]
     public Tribe targetTribe; 
     
     [Header("Effect")]
@@ -57,10 +68,14 @@ public class AbilityData : ScriptableObject
     public int valueX; 
     public int valueY; 
     
-    [Header("Summoning")]
+    [Header("Summoning (Optional)")]
+    [Tooltip("Only used if Effect is SummonUnit")]
     public UnitData tokenUnit; 
-    public AbilitySpawnLocation spawnLocation; // NEW
+    public AbilitySpawnLocation spawnLocation;
     
-    [Header("Visuals")]
-    public GameObject vfxPrefab; 
+    [Header("Visuals & Audio")]
+    public GameObject vfxPrefab;
+    public VFXSpawnPoint vfxSpawnPoint;
+    public float vfxDuration = 2.0f; // How long before the effect destroys itself
+    public AudioClip soundEffect;    // Sound to play when ability triggers
 }
