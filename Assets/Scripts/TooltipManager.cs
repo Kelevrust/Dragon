@@ -19,6 +19,7 @@ public class TooltipManager : MonoBehaviour
 
     [Header("Layout")]
     public RectTransform rootRect;      
+    public float maxTextWidth = 250f; // NEW: Constraint for text width
     
     private CardDisplay currentTarget;
 
@@ -33,42 +34,38 @@ public class TooltipManager : MonoBehaviour
         // 1. Auto-Generate Big Card Visual if missing in Inspector
         if (bigCardVisual == null)
         {
-            // We grab the standard card prefab from the GameManager
             if (GameManager.instance != null && GameManager.instance.cardPrefab != null && tooltipRoot != null)
             {
                 GameObject obj = Instantiate(GameManager.instance.cardPrefab, tooltipRoot.transform);
                 obj.name = "BigCardVisual_Auto";
-                
-                // Ensure it sits at the start (Left side) of the layout
                 obj.transform.SetAsFirstSibling();
                 
                 bigCardVisual = obj.GetComponent<CardDisplay>();
-                
-                // Remove interactive components since this is just a visual display
                 Destroy(obj.GetComponent<Button>()); 
                 
-                // NEW: Fix the "Whole Screen" scaling bug
-                // We force a Layout Element to dictate the size, ignoring parent stretch settings
                 LayoutElement le = obj.GetComponent<LayoutElement>();
                 if (le == null) le = obj.AddComponent<LayoutElement>();
                 le.minWidth = 200;
                 le.minHeight = 300;
                 le.preferredWidth = 200;
                 le.preferredHeight = 300;
-                le.flexibleWidth = 0; // Do not stretch width
-                le.flexibleHeight = 0; // Do not stretch height
-
-                Debug.Log("TooltipManager: Auto-generated Big Card Visual with Fixed Size.");
+                le.flexibleWidth = 0; 
+                le.flexibleHeight = 0;
             }
         }
 
-        // 2. Setup Canvas Group to prevent flickering/blocking mouse
+        // 2. Setup Canvas Group
         if (tooltipRoot != null)
         {
             CanvasGroup cg = tooltipRoot.GetComponent<CanvasGroup>();
             if (cg == null) cg = tooltipRoot.AddComponent<CanvasGroup>();
             cg.blocksRaycasts = false; 
             cg.interactable = false;
+            
+            ContentSizeFitter csf = tooltipRoot.GetComponent<ContentSizeFitter>();
+            if (csf == null) csf = tooltipRoot.AddComponent<ContentSizeFitter>();
+            csf.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+            csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
         }
 
         Hide();
@@ -84,23 +81,27 @@ public class TooltipManager : MonoBehaviour
 
     private void UpdatePosition()
     {
-        Vector2 mousePos = Vector2.zero;
-        if (Mouse.current != null)
-        {
-            mousePos = Mouse.current.position.ReadValue();
-        }
-
         // Safety check if target disappeared
-        if (currentTarget == null) 
+        if (currentTarget == null || !currentTarget.gameObject.activeInHierarchy) 
         {
             Hide();
             return;
         }
 
+        // 1. Get Target Position
         Vector3 targetPos = currentTarget.transform.position;
 
+        // 2. FIX: Override Z to match the Canvas Plane to prevent zoom/scale artifacts
+        if (tooltipRoot.transform.parent != null)
+        {
+            targetPos.z = tooltipRoot.transform.parent.position.z;
+        }
+
+        // 3. Determine Side
+        // Convert to Screen point to check left/right accurately
+        Vector3 screenPos = Camera.main != null ? Camera.main.WorldToScreenPoint(targetPos) : targetPos;
         float screenCenterX = Screen.width / 2f;
-        bool cardIsOnLeft = targetPos.x < screenCenterX;
+        bool cardIsOnLeft = screenPos.x < screenCenterX;
         
         float pivotX = cardIsOnLeft ? -0.1f : 1.1f; 
         if (rootRect != null)
@@ -114,46 +115,16 @@ public class TooltipManager : MonoBehaviour
     {
         if (sourceCard == null || sourceCard.unitData == null) return;
 
-        // CRITICAL FIX: Guard against missing Big Card reference
-        if (bigCardVisual == null)
-        {
-            // If auto-generation failed (e.g. GameManager was null in Start), try one last time or warn
-            if (GameManager.instance != null && GameManager.instance.cardPrefab != null && tooltipRoot != null)
-            {
-                 GameObject obj = Instantiate(GameManager.instance.cardPrefab, tooltipRoot.transform);
-                 obj.transform.SetAsFirstSibling();
-                 bigCardVisual = obj.GetComponent<CardDisplay>();
-                 Destroy(obj.GetComponent<Button>());
-                 
-                 // Apply size fix here too
-                 LayoutElement le = obj.GetComponent<LayoutElement>();
-                 if (le == null) le = obj.AddComponent<LayoutElement>();
-                 le.minWidth = 200;
-                 le.minHeight = 300;
-                 le.preferredWidth = 200;
-                 le.preferredHeight = 300;
-            }
-
-            if (bigCardVisual == null)
-            {
-                Debug.LogError("TooltipManager: 'Big Card Visual' could not be created! Assign it in Inspector.");
-                return;
-            }
-        }
+        if (bigCardVisual == null) return;
 
         currentTarget = sourceCard;
 
-        // Copy Data
         bigCardVisual.LoadUnit(sourceCard.unitData);
-        
-        // Copy Stats
         bigCardVisual.currentAttack = sourceCard.currentAttack;
         bigCardVisual.currentHealth = sourceCard.currentHealth;
         bigCardVisual.permanentAttack = sourceCard.permanentAttack;
         bigCardVisual.permanentHealth = sourceCard.permanentHealth;
         bigCardVisual.isGolden = sourceCard.isGolden;
-        
-        // Update the visual representation
         bigCardVisual.UpdateVisuals();
 
         RefreshBuffList(sourceCard);
@@ -161,8 +132,8 @@ public class TooltipManager : MonoBehaviour
         if (tooltipRoot != null)
         {
             tooltipRoot.SetActive(true);
-            
-            // Force layout rebuild to prevent visual glitches
+            tooltipRoot.transform.localScale = Vector3.one;
+
             LayoutRebuilder.ForceRebuildLayoutImmediate(rootRect);
             if (buffContainer != null) 
                 LayoutRebuilder.ForceRebuildLayoutImmediate(buffContainer.GetComponent<RectTransform>());
@@ -179,12 +150,27 @@ public class TooltipManager : MonoBehaviour
 
         bool hasBuffs = false;
 
+        // 1. Manual Description
         if (!string.IsNullOrEmpty(source.unitData.description))
         {
             CreateBuffText(source.unitData.description, Color.white);
             hasBuffs = true;
         }
         
+        // 2. NEW: Auto-Generated Mechanics Text (The self-documenting code!)
+        // CardDisplay generates this in UpdateVisuals(), usually into its own text box.
+        // We grab it here to show in the tooltip side panel.
+        if (source.mechanicsText != null && !string.IsNullOrEmpty(source.mechanicsText.text))
+        {
+            // Avoid duplicate text if description matches mechanics
+            if (source.mechanicsText.text != source.unitData.description)
+            {
+                CreateBuffText(source.mechanicsText.text, new Color(0.8f, 0.8f, 1f)); // Light Blue
+                hasBuffs = true;
+            }
+        }
+
+        // 3. Golden Status
         if (source.isGolden)
         {
             CreateBuffText("Golden: Double Stats", Color.yellow);
@@ -208,6 +194,12 @@ public class TooltipManager : MonoBehaviour
         
         t.textWrappingMode = TextWrappingModes.Normal; 
         t.alignment = TextAlignmentOptions.Left;
+
+        // FIX: Add Layout Element to enforce width wrapping
+        LayoutElement le = t.GetComponent<LayoutElement>();
+        if (le == null) le = t.gameObject.AddComponent<LayoutElement>();
+        le.preferredWidth = maxTextWidth; // Constraint width
+        le.flexibleWidth = 0;
     }
 
     public void Hide()

@@ -200,7 +200,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.101960786, g: 0.101960786, b: 0.101960786, a: 1}
+  m_Color: {r: 0.2924528, g: 0.2924528, b: 0.2924528, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -458,6 +458,7 @@ GameObject:
   - component: {fileID: 4923572586534273247}
   - component: {fileID: 7679588844068877209}
   - component: {fileID: -5164982424908324489}
+  - component: {fileID: 3811937121937202676}
   m_Layer: 5
   m_Name: CardPrefab
   m_TagString: Untagged
@@ -484,7 +485,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -781.7999, y: -308.5}
+  m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 200, y: 300}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &7974524384070205348
@@ -538,7 +539,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CardDisplay
   unitData: {fileID: 11400000, guid: 243d02741ee76c74db14de5305654085, type: 2}
-  artworkImage: {fileID: 7728368390216381233}
+  artworkImage: {fileID: 0}
   nameText: {fileID: 5633464022708928280}
   descriptionText: {fileID: 5123568163463916056}
   mechanicsText: {fileID: 1822647070128803111}
@@ -546,7 +547,7 @@ MonoBehaviour:
   tribeText: {fileID: 8157129930161645221}
   attackText: {fileID: 2250379122772149564}
   healthText: {fileID: 1769215558851484858}
-  frameImage: {fileID: 0}
+  frameImage: {fileID: 5101652054092638370}
   isPurchased: 0
   isGolden: 0
   permanentAttack: 0
@@ -583,6 +584,26 @@ MonoBehaviour:
   m_EffectColor: {r: 0.2264151, g: 0.21893913, b: 0.21893913, a: 0.5}
   m_EffectDistance: {x: 1, y: -1}
   m_UseGraphicAlpha: 1
+--- !u!114 &3811937121937202676
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2164063162798385236}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 306cc8c2b49d7114eaa3623786fc2126, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.LayoutElement
+  m_IgnoreLayout: 0
+  m_MinWidth: 200
+  m_MinHeight: 300
+  m_PreferredWidth: 200
+  m_PreferredHeight: 300
+  m_FlexibleWidth: 0
+  m_FlexibleHeight: 0
+  m_LayoutPriority: 1
 --- !u!1 &2880823999874132124
 GameObject:
   m_ObjectHideFlags: 0
@@ -1084,7 +1105,7 @@ MonoBehaviour:
   m_fontColor32:
     serializedVersion: 2
     rgba: 4278190080
-  m_fontColor: {r: 0, g: 0, b: 0, a: 1}
+  m_fontColor: {r: 0.45209536, g: 0.4669811, b: 0.12996173, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:

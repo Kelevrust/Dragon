@@ -13,7 +13,6 @@ public class CombatManager : MonoBehaviour
     [Tooltip("Time to wait before returning to shop.")]
     public float shopReturnDelay = 1.0f;
 
-    // --- NEW: AUDIO FX HEADER ---
     [Header("Audio FX")]
     public AudioClip combatStartClip;
     public AudioClip attackClip;
@@ -60,14 +59,12 @@ public class CombatManager : MonoBehaviour
         SaveRoster();
         GameManager.instance.currentPhase = GameManager.GamePhase.Combat;
         
-        // PvP Lobby Logic
         if (LobbyManager.instance != null)
         {
             var opponent = LobbyManager.instance.GetNextOpponent();
             if (opponent != null) Debug.Log($"<color=orange>Fighting Opponent: {opponent.name}</color>");
         }
 
-        // SFX
         if (AudioManager.instance != null) AudioManager.instance.PlaySFX(combatStartClip);
 
         SpawnEnemies(); 
@@ -146,7 +143,6 @@ public class CombatManager : MonoBehaviour
             yield return StartCoroutine(AnimateAttack(pUnit.transform, eUnit.transform));
             yield return StartCoroutine(AnimateAttack(eUnit.transform, pUnit.transform));
 
-            // SFX: Hit Impact
             if (AudioManager.instance != null) AudioManager.instance.PlaySFX(hitClip);
 
             int pDmg = combatAttacks[eUnit];
@@ -192,20 +188,15 @@ public class CombatManager : MonoBehaviour
 
     void KillUnit(CardDisplay unit, List<CardDisplay> list, bool isEnemy)
     {
-        // SFX: Death
         if (AudioManager.instance != null) AudioManager.instance.PlaySFX(deathClip);
 
-        // 1. Capture the board reference BEFORE moving the unit
         Transform oldBoard = unit.transform.parent;
 
         if (AbilityManager.instance != null)
         {
             try 
             { 
-                // A. Trigger Self Deathrattle
                 AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnDeath, unit, oldBoard); 
-                
-                // B. Trigger Ally "OnAllyDeath" Abilities
                 AbilityManager.instance.TriggerAllyDeathAbilities(unit, oldBoard);
             }
             catch (System.Exception e) { Debug.LogError($"Deathrattle error: {e.Message}"); }
@@ -221,63 +212,67 @@ public class CombatManager : MonoBehaviour
     {
         if (attacker == null || target == null) yield break;
 
-        // SFX: Attack Swing
         if (AudioManager.instance != null) AudioManager.instance.PlaySFX(attackClip);
 
-        // --- NEW: PROJECTILE LOGIC ---
+        // --- NEW: PROJECTILE LOGIC WITH Z-OFFSET FIX ---
         CardDisplay cd = attacker.GetComponent<CardDisplay>();
-        if (cd != null && cd.unitData.attackProjectilePrefab != null)
+        bool usedProjectile = false;
+
+        if (cd != null && cd.unitData != null && cd.unitData.attackProjectilePrefab != null)
         {
             // Spawn Projectile
+            // NOTE: We don't parent it to the board, or it will scale weirdly. Root is better.
             GameObject projObj = Instantiate(cd.unitData.attackProjectilePrefab);
             Projectile proj = projObj.GetComponent<Projectile>();
+            
             if (proj != null)
             {
-                // Travel time is part of the animation duration
+                // FIX: Force Z-Index closer to camera so it draws ON TOP of cards
+                Vector3 startPos = attacker.position;
+                startPos.z -= 10f; // Pull towards camera
+                
+                Vector3 targetPos = target.position;
+                targetPos.z -= 10f; // Pull towards camera
+
                 float travelTime = combatPace * 0.4f; 
-                proj.Initialize(attacker.position, target.position, travelTime);
+                proj.Initialize(startPos, targetPos, travelTime);
+                
+                usedProjectile = true;
                 
                 // Wait for impact
                 yield return new WaitForSeconds(travelTime);
             }
             else
             {
-                // Safety cleanup if script missing
-                Destroy(projObj);
-                // Fallback to bump
-                yield return StartCoroutine(DoBumpAnimation(attacker, target));
+                Destroy(projObj); // Cleanup bad prefab
             }
         }
-        else
-        {
-            // Default Bump Animation
-            yield return StartCoroutine(DoBumpAnimation(attacker, target));
-        }
-    }
 
-    IEnumerator DoBumpAnimation(Transform attacker, Transform target)
-    {
-        Vector3 originalPos = attacker.position;
-        Vector3 targetPos = target.position;
-        float duration = combatPace * 0.2f; 
-        
-        float elapsed = 0f;
-        while (elapsed < duration)
+        // Fallback to Bump Animation if no projectile used
+        if (!usedProjectile)
         {
-            if (attacker == null) yield break; 
-            attacker.position = Vector3.Lerp(originalPos, targetPos, (elapsed / duration) * 0.5f);
-            elapsed += Time.deltaTime;
-            yield return null;
+            Vector3 originalPos = attacker.position;
+            Vector3 targetPos = target.position;
+            float duration = combatPace * 0.2f; 
+            
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                if (attacker == null) yield break; 
+                attacker.position = Vector3.Lerp(originalPos, targetPos, (elapsed / duration) * 0.5f);
+                elapsed += Time.deltaTime;
+                yield return null;
+            }
+            elapsed = 0f;
+            while (elapsed < duration)
+            {
+                if (attacker == null) yield break;
+                attacker.position = Vector3.Lerp(attacker.position, originalPos, (elapsed / duration));
+                elapsed += Time.deltaTime;
+                yield return null;
+            }
+            if(attacker != null) attacker.position = originalPos;
         }
-        elapsed = 0f;
-        while (elapsed < duration)
-        {
-            if (attacker == null) yield break;
-            attacker.position = Vector3.Lerp(attacker.position, originalPos, (elapsed / duration));
-            elapsed += Time.deltaTime;
-            yield return null;
-        }
-        if(attacker != null) attacker.position = originalPos;
     }
 
     List<CardDisplay> GetUnits(Transform board)

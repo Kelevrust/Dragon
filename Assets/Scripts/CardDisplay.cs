@@ -12,14 +12,13 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     [Header("UI References")]
     public Image artworkImage;
     public TMP_Text nameText;
-    public TMP_Text descriptionText; // Manual flavor/rules text
-    
-    // NEW: Auto-generated mechanics text
-    public TMP_Text mechanicsText;   
+    public TMP_Text descriptionText; 
     
     public Image tribeBanner;        
     public TMP_Text tribeText;       
     
+    public TMP_Text mechanicsText; // Auto-generated text
+
     public TMP_Text attackText;
     public TMP_Text healthText;
     public Image frameImage;
@@ -116,10 +115,16 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     {
         if (unitData == null) return;
 
-        if (nameText != null) nameText.text = isGolden ? "Golden " + unitData.unitName : unitData.unitName;
+        if (nameText != null) 
+        {
+            nameText.text = isGolden ? "Golden " + unitData.unitName : unitData.unitName;
+            // NEW: Match Name Color to Frame (Neon Style)
+            nameText.color = isGolden ? new Color(1f, 0.8f, 0.2f) : unitData.frameColor;
+        }
+
         if (descriptionText != null) descriptionText.text = unitData.description;
         
-        // NEW: Generate Auto-Description
+        // Auto-Description
         if (mechanicsText != null) mechanicsText.text = GenerateMechanicsText();
 
         if (artworkImage != null) artworkImage.sprite = unitData.artwork;
@@ -165,26 +170,22 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         }
     }
 
-    // NEW: Procedural text generation based on Unit Data
     string GenerateMechanicsText()
     {
         StringBuilder sb = new StringBuilder();
 
-        // 1. Keywords (Bold)
         if (unitData.hasTaunt) sb.Append("<b>Taunt</b>. ");
-        if (hasDivineShield) sb.Append("<b>Divine Shield</b>. "); // Use runtime value
-        if (hasReborn) sb.Append("<b>Reborn</b>. "); // Use runtime value
+        if (hasDivineShield) sb.Append("<b>Divine Shield</b>. "); 
+        if (hasReborn) sb.Append("<b>Reborn</b>. "); 
 
         if (sb.Length > 0) sb.Append("\n");
 
-        // 2. Abilities
         if (unitData.abilities != null)
         {
             foreach (AbilityData ability in unitData.abilities)
             {
                 if (ability == null) continue;
 
-                // Trigger Prefix
                 switch (ability.triggerType)
                 {
                     case AbilityTrigger.OnPlay: sb.Append("<b>Battlecry:</b> "); break;
@@ -195,7 +196,6 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
                     case AbilityTrigger.OnDamageTaken: sb.Append("<b>Enrage:</b> "); break;
                 }
 
-                // Effect Description
                 switch (ability.effectType)
                 {
                     case AbilityEffect.BuffStats:
@@ -240,7 +240,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
             case AbilityTarget.AllFriendly: return "all allies";
             case AbilityTarget.RandomFriendly: return "a random ally";
             case AbilityTarget.AdjacentFriendly: return "adjacent allies";
-            case AbilityTarget.AllFriendlyTribe: return "all friendly Tribe"; // Needs tribe name context
+            case AbilityTarget.AllFriendlyTribe: return "all friendly Tribe"; 
             case AbilityTarget.RandomFriendlyTribe: return "a random friendly Tribe";
             default: return "target";
         }
