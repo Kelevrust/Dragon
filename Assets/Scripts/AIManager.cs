@@ -1,69 +1,115 @@
 using UnityEngine;
 using System.Collections.Generic;
+using System.Linq;
 
 public class AIManager : MonoBehaviour
 {
     public static AIManager instance;
 
     [Header("AI Settings")]
-    [Tooltip("Multiplier for AI Gold. 1.0 = Normal, 1.2 = Harder.")]
-    public float difficultyMultiplier = 1.0f;
+    [Tooltip("Multiplier for AI Gold. 1.0 = Normal.")]
+    public float difficultyMultiplier = 1.0f; 
 
     [Header("Data Source")]
     [Tooltip("DRAG ALL UNIT FILES HERE (Tier 1-6)")]
-    public UnitData[] allUnits;
+    public UnitData[] allUnits; 
+    
+    // Tier costs matching ShopManager
+    private int[] tierCosts = new int[] { 0, 0, 5, 7, 8, 9, 10 }; 
 
     void Awake() { instance = this; }
 
+    // Fallback for procedural gen
     public List<UnitData> GenerateEnemyBoard(int turnNumber)
     {
+        // ... (Keep existing procedural logic as fallback if needed, or remove) ...
+        // Keeping it for safety:
         List<UnitData> board = new List<UnitData>();
-
-        // 1. Calculate Economy
-        // Logic: Player gains roughly 1 unit worth of value (3g) per turn.
-        // Base: 3g. Growth: +3g per turn.
-        // Example Turn 1: 3g + 3g = 6g (2 Units)
-        // Example Turn 3: 3g + 9g = 12g (4 Units)
-        float rawBudget = (3 + (turnNumber * 3.0f)) * difficultyMultiplier;
-        int budget = Mathf.RoundToInt(rawBudget);
-
-        // 2. Determine Max Tier (Unlocks every 2 turns)
+        int budget = Mathf.RoundToInt((3 + (turnNumber * 3.0f)) * difficultyMultiplier);
         int maxTier = Mathf.Clamp((turnNumber / 2) + 1, 1, 6);
+        List<UnitData> validUnits = allUnits.Where(u => u.tier <= maxTier).ToList();
+        if (validUnits.Count == 0) return board;
 
-        // 3. Filter valid units
-        List<UnitData> validUnits = new List<UnitData>();
-        foreach (var u in allUnits)
-        {
-            if (u != null && u.tier <= maxTier) validUnits.Add(u);
-        }
-
-        // Safety Check
-        if (validUnits.Count == 0)
-        {
-            Debug.LogError("AIManager: No valid units found! Did you populate the 'All Units' list in the Inspector?");
-            return board;
-        }
-
-        // 4. Spend Budget
         int currentCost = 0;
-        int attempts = 0; // Prevent infinite loops
-
+        int attempts = 0;
         while (currentCost < budget && board.Count < 7 && attempts < 50)
         {
             attempts++;
-
-            // Pick a random unit
             UnitData pick = validUnits[Random.Range(0, validUnits.Count)];
+            if (currentCost + pick.cost <= budget) { board.Add(pick); currentCost += pick.cost; }
+        }
+        return board;
+    }
 
-            // Check if we can afford it
-            if (currentCost + pick.cost <= budget)
+    // NEW: Persistent Simulation
+    public void SimulateOpponentTurn(LobbyManager.Opponent bot, int turnNumber)
+    {
+        // 1. Income
+        int income = Mathf.Min(3 + turnNumber, 10);
+        bot.gold = income; // Reset gold (or add saved gold if we want banking later)
+
+        // 2. Decide Upgrade
+        // Heuristic: If we have enough gold to upgrade AND buy at least 1 unit, do it.
+        // Or if we have a full board and plenty gold.
+        int upgradeCost = GetUpgradeCost(bot.tavernTier);
+        if (bot.tavernTier < 6 && bot.gold >= upgradeCost + 3)
+        {
+            if (Random.value > 0.3f) // 70% chance to upgrade if affordable
             {
-                board.Add(pick);
-                currentCost += pick.cost;
+                bot.gold -= upgradeCost;
+                bot.tavernTier++;
+                // Debug.Log($"{bot.name} upgraded to Tier {bot.tavernTier}");
             }
         }
 
-        Debug.Log($"<color=cyan>AI (Turn {turnNumber})</color> | Budget: {budget} | Spawned: {board.Count} units | Tier Cap: {maxTier}");
-        return board;
+        // 3. Buy Units
+        // Get units available at this tier
+        List<UnitData> shopOptions = allUnits.Where(u => u.tier <= bot.tavernTier).ToList();
+        
+        // AI Rerolls/Buys until out of gold or board full
+        int rerolls = 0;
+        while (bot.gold >= 3 && rerolls < 5)
+        {
+            if (shopOptions.Count == 0) break;
+
+            UnitData pick = shopOptions[Random.Range(0, shopOptions.Count)];
+
+            // Logic: Do we buy?
+            // If board not full -> Buy
+            if (bot.roster.Count < 7)
+            {
+                bot.gold -= pick.cost;
+                bot.roster.Add(pick);
+            }
+            // If board full -> Check if this unit is better than our worst
+            else
+            {
+                // Simple heuristic: Compare Tiers
+                UnitData worstUnit = bot.roster.OrderBy(u => u.tier).First();
+                if (pick.tier > worstUnit.tier)
+                {
+                    // Sell worst (+1g), Buy new (-3g) -> Net -2g
+                    if (bot.gold >= 2) 
+                    {
+                        bot.roster.Remove(worstUnit);
+                        bot.gold -= 2; // (3 cost - 1 refund)
+                        bot.roster.Add(pick);
+                    }
+                }
+            }
+            
+            // Simulate "Reroll" cost occasionally if didn't buy
+            if (Random.value > 0.7f) 
+            {
+                bot.gold -= 1;
+                rerolls++;
+            }
+        }
+    }
+
+    int GetUpgradeCost(int currentTier)
+    {
+        if (currentTier + 1 >= tierCosts.Length) return 99;
+        return tierCosts[currentTier + 1];
     }
 }

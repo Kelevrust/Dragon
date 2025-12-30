@@ -59,10 +59,11 @@ public class CombatManager : MonoBehaviour
         SaveRoster();
         GameManager.instance.currentPhase = GameManager.GamePhase.Combat;
         
+        // PvP Lobby Logic: Pick opponent
         if (LobbyManager.instance != null)
         {
             var opponent = LobbyManager.instance.GetNextOpponent();
-            if (opponent != null) Debug.Log($"<color=orange>Fighting Opponent: {opponent.name}</color>");
+            if (opponent != null) Debug.Log($"<color=orange>Fighting Opponent: {opponent.name} (Tier {opponent.tavernTier})</color>");
         }
 
         if (AudioManager.instance != null) AudioManager.instance.PlaySFX(combatStartClip);
@@ -102,16 +103,25 @@ public class CombatManager : MonoBehaviour
     {
         foreach (Transform child in enemyBoard) Destroy(child.gameObject);
 
-        AIManager ai = AIManager.instance;
-        if (ai != null)
+        List<UnitData> enemyRoster = new List<UnitData>();
+
+        // 1. Try to get persistent bot roster
+        if (LobbyManager.instance != null && LobbyManager.instance.currentOpponent != null)
         {
-            List<UnitData> enemyRoster = ai.GenerateEnemyBoard(GameManager.instance.turnNumber);
-            foreach (UnitData data in enemyRoster)
-            {
-                GameObject newCard = Instantiate(cardPrefab, enemyBoard);
-                newCard.GetComponent<CardDisplay>().LoadUnit(data);
-                Destroy(newCard.GetComponent<UnityEngine.UI.Button>()); 
-            }
+            enemyRoster = LobbyManager.instance.currentOpponent.roster;
+        }
+        // 2. Fallback to procedural generation (if no lobby or error)
+        else if (AIManager.instance != null)
+        {
+            enemyRoster = AIManager.instance.GenerateEnemyBoard(GameManager.instance.turnNumber);
+        }
+
+        foreach (UnitData data in enemyRoster)
+        {
+            GameObject newCard = Instantiate(cardPrefab, enemyBoard);
+            newCard.GetComponent<CardDisplay>().LoadUnit(data);
+            Destroy(newCard.GetComponent<UnityEngine.UI.Button>()); 
+            // Note: In a full version, we would also need to load the bot's buffed stats/golden status here
         }
     }
 
@@ -214,41 +224,35 @@ public class CombatManager : MonoBehaviour
 
         if (AudioManager.instance != null) AudioManager.instance.PlaySFX(attackClip);
 
-        // --- NEW: PROJECTILE LOGIC WITH Z-OFFSET FIX ---
         CardDisplay cd = attacker.GetComponent<CardDisplay>();
         bool usedProjectile = false;
 
         if (cd != null && cd.unitData != null && cd.unitData.attackProjectilePrefab != null)
         {
-            // Spawn Projectile
-            // NOTE: We don't parent it to the board, or it will scale weirdly. Root is better.
             GameObject projObj = Instantiate(cd.unitData.attackProjectilePrefab);
             Projectile proj = projObj.GetComponent<Projectile>();
             
             if (proj != null)
             {
-                // FIX: Force Z-Index closer to camera so it draws ON TOP of cards
                 Vector3 startPos = attacker.position;
-                startPos.z -= 10f; // Pull towards camera
+                startPos.z -= 10f; 
                 
                 Vector3 targetPos = target.position;
-                targetPos.z -= 10f; // Pull towards camera
+                targetPos.z -= 10f; 
 
                 float travelTime = combatPace * 0.4f; 
                 proj.Initialize(startPos, targetPos, travelTime);
                 
                 usedProjectile = true;
                 
-                // Wait for impact
                 yield return new WaitForSeconds(travelTime);
             }
             else
             {
-                Destroy(projObj); // Cleanup bad prefab
+                Destroy(projObj);
             }
         }
 
-        // Fallback to Bump Animation if no projectile used
         if (!usedProjectile)
         {
             Vector3 originalPos = attacker.position;
@@ -302,6 +306,7 @@ public class CombatManager : MonoBehaviour
             AnalyticsManager.instance.TrackRoundResult(GameManager.instance.turnNumber, playerWon, damageTaken, GameManager.instance.playerHealth);
         GameManager.instance.LogGameState($"Post-Combat (Damage: {damageTaken})");
 
+        // PvP Update
         if (LobbyManager.instance != null)
         {
             int damageDealt = 0;
@@ -312,6 +317,8 @@ public class CombatManager : MonoBehaviour
                 foreach(var s in survivors) damageDealt += s.unitData.tier;
             }
             LobbyManager.instance.ReportPlayerVsBotResult(playerWon, damageDealt);
+            
+            // SIMULATE other battles
             LobbyManager.instance.SimulateRoundForBots(GameManager.instance.turnNumber);
         }
 

@@ -1236,7 +1236,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 198d0effc82afc2478917e9c3cd9708a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LeaderboardUI
-  rowPrefab: {fileID: 968488977637985921, guid: fb2d4b4545476f043bb85888e78e3776, type: 3}
+  rowPrefab: {fileID: 6971371409889345443, guid: e9af280834449c2438ea15bf34344127, type: 3}
   contentContainer: {fileID: 46730722}
 --- !u!4 &287272803
 Transform:
@@ -4462,6 +4462,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::LobbyManager
   totalPlayers: 8
   startingHealth: 30
+  botPortraits: []
   opponents: []
   currentOpponent:
     id: 
@@ -4470,6 +4471,10 @@ MonoBehaviour:
     health: 0
     isDead: 0
     lastDamageTaken: 0
+    heroPortrait: {fileID: 0}
+    gold: 0
+    tavernTier: 0
+    roster: []
 --- !u!4 &1231775255
 Transform:
   m_ObjectHideFlags: 0

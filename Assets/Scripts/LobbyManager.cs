@@ -11,21 +11,31 @@ public class LobbyManager : MonoBehaviour
     {
         public string id;
         public string name;
-        public string heroName; // e.g. "The Woodsman"
+        public string heroName; 
         public int health;
         public bool isDead;
         public int lastDamageTaken;
+        
+        // Visuals
+        public Sprite heroPortrait;
+        
+        // AI State
+        public int gold;
+        public int tavernTier;
+        public List<UnitData> roster; 
     }
 
     [Header("Configuration")]
     public int totalPlayers = 8;
-    public int startingHealth = 30; // Should match GameManager
+    public int startingHealth = 30; 
+
+    [Header("Visual Assets")]
+    public Sprite[] botPortraits; // Drag hero sprites here!
 
     [Header("State")]
     public List<Opponent> opponents = new List<Opponent>();
-    public Opponent currentOpponent; // The bot the player is currently fighting
+    public Opponent currentOpponent; 
 
-    // Thematic Names for Project Grimm
     private string[] botNames = new string[] {
         "The Woodsman", "Baba Yaga", "Big Bad Wolf", "Cinderella", 
         "Hansel", "Gretel", "Snow White", "Prince Charming", 
@@ -47,8 +57,6 @@ public class LobbyManager : MonoBehaviour
     public void InitializeLobby()
     {
         opponents.Clear();
-        
-        // Randomly pick names
         List<string> names = botNames.OrderBy(x => Random.value).Take(totalPlayers - 1).ToList();
         
         foreach(string name in names)
@@ -56,15 +64,27 @@ public class LobbyManager : MonoBehaviour
             Opponent bot = new Opponent();
             bot.id = System.Guid.NewGuid().ToString();
             bot.name = name;
-            bot.heroName = "Unknown Hero"; // We can expand this later
+            bot.heroName = "Unknown"; 
             bot.health = startingHealth;
             bot.isDead = false;
+            
+            // Assign random portrait if available
+            if (botPortraits != null && botPortraits.Length > 0)
+            {
+                bot.heroPortrait = botPortraits[Random.Range(0, botPortraits.Length)];
+            }
+            
+            // AI Setup
+            bot.gold = 3;
+            bot.tavernTier = 1;
+            bot.roster = new List<UnitData>();
+            
+            if (AIManager.instance != null) AIManager.instance.SimulateOpponentTurn(bot, 0);
+
             opponents.Add(bot);
         }
         
         Debug.Log($"Lobby Initialized with {opponents.Count} opponents.");
-        
-        // Initial Sort/UI Update
         UpdateLeaderboardUI();
     }
 
@@ -74,33 +94,35 @@ public class LobbyManager : MonoBehaviour
         
         if (alive.Count == 0) 
         {
-            currentOpponent = null; // Everyone else is dead! Player wins lobby?
+            currentOpponent = null; 
             return null;
         }
         
-        // Simple random matchmaking for MVP
-        // In real auto-battlers, you avoid the person you just played
         currentOpponent = alive[Random.Range(0, alive.Count)];
-        
-        Debug.Log($"Next Opponent: {currentOpponent.name} ({currentOpponent.health} HP)");
         return currentOpponent;
     }
 
-    // Call this when Player's combat phase ends
     public void SimulateRoundForBots(int turnNumber)
     {
         foreach(var bot in opponents)
         {
             if (bot.isDead) continue;
-            if (bot == currentOpponent) continue; // Skip the one fighting the player (handled by result)
+            if (AIManager.instance != null) AIManager.instance.SimulateOpponentTurn(bot, turnNumber);
+        }
+
+        foreach(var bot in opponents)
+        {
+            if (bot.isDead) continue;
+            if (bot == currentOpponent) continue; 
             
-            // 50/50 Win/Loss Simulation for other bots
-            bool won = Random.value > 0.5f;
+            int power = bot.roster.Sum(u => u.tier) + bot.roster.Count;
+            int avgPower = turnNumber * 2; 
+            
+            bool won = power >= avgPower + Random.Range(-2, 3); 
             
             if (!won)
             {
-                // Damage scaling: 2 base + turn number roughly
-                int damage = Random.Range(2, 3 + turnNumber);
+                int damage = Random.Range(2, 3 + (turnNumber/2));
                 bot.health -= damage;
                 bot.lastDamageTaken = damage;
                 
@@ -108,7 +130,6 @@ public class LobbyManager : MonoBehaviour
                 {
                     bot.health = 0;
                     bot.isDead = true;
-                    Debug.Log($"<color=red>{bot.name} has been eliminated!</color>");
                 }
             }
             else
@@ -120,23 +141,20 @@ public class LobbyManager : MonoBehaviour
         UpdateLeaderboardUI();
     }
     
-    // Handle the result of the Player vs Bot match specifically
     public void ReportPlayerVsBotResult(bool playerWon, int damageToLoser)
     {
         if (currentOpponent == null) return;
 
-        // If Player Won, Bot takes damage
         if (playerWon)
         {
             currentOpponent.health -= damageToLoser;
+            currentOpponent.lastDamageTaken = damageToLoser;
             if (currentOpponent.health <= 0)
             {
                 currentOpponent.health = 0;
                 currentOpponent.isDead = true;
-                Debug.Log($"Player eliminated {currentOpponent.name}!");
             }
         }
-        // If Player Lost, Player takes damage (Handled by GameManager), Bot takes 0.
         
         UpdateLeaderboardUI();
     }
