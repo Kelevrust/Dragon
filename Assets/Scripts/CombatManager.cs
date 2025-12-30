@@ -220,10 +220,43 @@ public class CombatManager : MonoBehaviour
     IEnumerator AnimateAttack(Transform attacker, Transform target)
     {
         if (attacker == null || target == null) yield break;
-        
+
         // SFX: Attack Swing
         if (AudioManager.instance != null) AudioManager.instance.PlaySFX(attackClip);
 
+        // --- NEW: PROJECTILE LOGIC ---
+        CardDisplay cd = attacker.GetComponent<CardDisplay>();
+        if (cd != null && cd.unitData.attackProjectilePrefab != null)
+        {
+            // Spawn Projectile
+            GameObject projObj = Instantiate(cd.unitData.attackProjectilePrefab);
+            Projectile proj = projObj.GetComponent<Projectile>();
+            if (proj != null)
+            {
+                // Travel time is part of the animation duration
+                float travelTime = combatPace * 0.4f; 
+                proj.Initialize(attacker.position, target.position, travelTime);
+                
+                // Wait for impact
+                yield return new WaitForSeconds(travelTime);
+            }
+            else
+            {
+                // Safety cleanup if script missing
+                Destroy(projObj);
+                // Fallback to bump
+                yield return StartCoroutine(DoBumpAnimation(attacker, target));
+            }
+        }
+        else
+        {
+            // Default Bump Animation
+            yield return StartCoroutine(DoBumpAnimation(attacker, target));
+        }
+    }
+
+    IEnumerator DoBumpAnimation(Transform attacker, Transform target)
+    {
         Vector3 originalPos = attacker.position;
         Vector3 targetPos = target.position;
         float duration = combatPace * 0.2f; 

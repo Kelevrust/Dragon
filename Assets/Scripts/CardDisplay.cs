@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using TMPro;
 using UnityEngine.EventSystems; 
 using System.Collections.Generic;
+using System.Text; // Required for StringBuilder
 
 public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandler, IDragHandler, IEndDragHandler
 {
@@ -11,7 +12,14 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     [Header("UI References")]
     public Image artworkImage;
     public TMP_Text nameText;
-    public TMP_Text descriptionText;
+    public TMP_Text descriptionText; // Manual flavor/rules text
+    
+    // NEW: Auto-generated mechanics text
+    public TMP_Text mechanicsText;   
+    
+    public Image tribeBanner;        
+    public TMP_Text tribeText;       
+    
     public TMP_Text attackText;
     public TMP_Text healthText;
     public Image frameImage;
@@ -20,25 +28,18 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     public bool isPurchased = false; 
     public bool isGolden = false;
 
-    // Stats
     public int permanentAttack;
     public int permanentHealth;
     public int currentAttack;
     public int currentHealth;
-    
-    // NEW: Runtime Keywords
+    public int damageTaken = 0;
     public bool hasDivineShield;
     public bool hasReborn;
-    // Taunt usually doesn't "break", so we can read it from unitData, 
-    // but if you want to be able to give/remove taunt later, add a bool here.
-
-    public int damageTaken = 0;
 
     private Color originalAttackColor = Color.black; 
     private Color originalHealthColor = Color.black;
     private bool colorsInitialized = false;
 
-    // Drag State
     private Transform originalParent;
     private int originalIndex;
     private CanvasGroup canvasGroup;
@@ -74,11 +75,10 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
             permanentHealth = data.baseHealth;
         }
         
-        // Initialize Keywords
         hasDivineShield = data.hasDivineShield;
         hasReborn = data.hasReborn;
-        
         damageTaken = 0;
+        
         ResetToPermanent();
         UpdateVisuals();
     }
@@ -94,19 +94,17 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         isGolden = true;
         permanentAttack = unitData.baseAttack * 2;
         permanentHealth = unitData.baseHealth * 2;
-        
         ResetToPermanent();
         UpdateVisuals();
     }
 
     public void TakeDamage(int amount)
     {
-        if (amount > 0 && hasDivineShield)
+        if (hasDivineShield && amount > 0)
         {
             hasDivineShield = false;
-            // TODO: Play Shield Break Sound/VFX
             UpdateVisuals();
-            return; // No damage taken
+            return; 
         }
 
         damageTaken += amount;
@@ -120,8 +118,27 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
 
         if (nameText != null) nameText.text = isGolden ? "Golden " + unitData.unitName : unitData.unitName;
         if (descriptionText != null) descriptionText.text = unitData.description;
+        
+        // NEW: Generate Auto-Description
+        if (mechanicsText != null) mechanicsText.text = GenerateMechanicsText();
+
         if (artworkImage != null) artworkImage.sprite = unitData.artwork;
         
+        if (tribeText != null) 
+        {
+            tribeText.text = unitData.tribe.ToString(); 
+        }
+
+        bool hasTribe = unitData.tribe != Tribe.None;
+        if (tribeBanner != null)
+        {
+            tribeBanner.gameObject.SetActive(hasTribe);
+        }
+        else if (tribeText != null)
+        {
+            tribeText.gameObject.SetActive(hasTribe);
+        }
+
         int baseAtk = isGolden ? unitData.baseAttack * 2 : unitData.baseAttack;
         int baseHp = isGolden ? unitData.baseHealth * 2 : unitData.baseHealth;
 
@@ -136,9 +153,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         if (healthText != null) 
         {
             healthText.text = currentHealth.ToString();
-            
-            // Visual logic for Divine Shield (Yellow Text? Or just an Icon later?)
-            if (hasDivineShield) healthText.color = Color.yellow; 
+            if (hasDivineShield) healthText.color = Color.yellow;
             else if (currentHealth < permanentHealth) healthText.color = Color.red;
             else if (currentHealth > baseHp) healthText.color = Color.green;
             else healthText.color = originalHealthColor;
@@ -147,6 +162,87 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         if (frameImage != null) 
         {
             frameImage.color = isGolden ? new Color(1f, 0.8f, 0.2f) : unitData.frameColor;
+        }
+    }
+
+    // NEW: Procedural text generation based on Unit Data
+    string GenerateMechanicsText()
+    {
+        StringBuilder sb = new StringBuilder();
+
+        // 1. Keywords (Bold)
+        if (unitData.hasTaunt) sb.Append("<b>Taunt</b>. ");
+        if (hasDivineShield) sb.Append("<b>Divine Shield</b>. "); // Use runtime value
+        if (hasReborn) sb.Append("<b>Reborn</b>. "); // Use runtime value
+
+        if (sb.Length > 0) sb.Append("\n");
+
+        // 2. Abilities
+        if (unitData.abilities != null)
+        {
+            foreach (AbilityData ability in unitData.abilities)
+            {
+                if (ability == null) continue;
+
+                // Trigger Prefix
+                switch (ability.triggerType)
+                {
+                    case AbilityTrigger.OnPlay: sb.Append("<b>Battlecry:</b> "); break;
+                    case AbilityTrigger.OnDeath: sb.Append("<b>Deathrattle:</b> "); break;
+                    case AbilityTrigger.PassiveAura: sb.Append("<b>Passive:</b> "); break;
+                    case AbilityTrigger.OnAllyDeath: sb.Append("<b>Scavenge:</b> "); break;
+                    case AbilityTrigger.OnTurnStart: sb.Append("<b>Start of Turn:</b> "); break;
+                    case AbilityTrigger.OnDamageTaken: sb.Append("<b>Enrage:</b> "); break;
+                }
+
+                // Effect Description
+                switch (ability.effectType)
+                {
+                    case AbilityEffect.BuffStats:
+                        int x = isGolden ? ability.valueX * 2 : ability.valueX;
+                        int y = isGolden ? ability.valueY * 2 : ability.valueY;
+                        string targetStr = GetTargetString(ability.targetType);
+                        sb.Append($"Give {targetStr} +{x}/+{y}.");
+                        break;
+                    
+                    case AbilityEffect.SummonUnit:
+                        string tokenName = ability.tokenUnit != null ? ability.tokenUnit.unitName : "Unit";
+                        sb.Append($"Summon a {tokenName}.");
+                        break;
+                    
+                    case AbilityEffect.GainGold:
+                        int gold = isGolden ? ability.valueX * 2 : ability.valueX;
+                        sb.Append($"Gain {gold} Gold.");
+                        break;
+                    
+                    case AbilityEffect.HealHero:
+                        int heal = isGolden ? ability.valueX * 2 : ability.valueX;
+                        sb.Append($"Restore {heal} Health to Hero.");
+                        break;
+
+                    case AbilityEffect.ReduceUpgradeCost:
+                        int red = isGolden ? ability.valueX * 2 : ability.valueX;
+                        sb.Append($"Reduce Tavern Upgrade cost by {red}.");
+                        break;
+                }
+                sb.Append("\n");
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    string GetTargetString(AbilityTarget target)
+    {
+        switch (target)
+        {
+            case AbilityTarget.Self: return "self";
+            case AbilityTarget.AllFriendly: return "all allies";
+            case AbilityTarget.RandomFriendly: return "a random ally";
+            case AbilityTarget.AdjacentFriendly: return "adjacent allies";
+            case AbilityTarget.AllFriendlyTribe: return "all friendly Tribe"; // Needs tribe name context
+            case AbilityTarget.RandomFriendlyTribe: return "a random friendly Tribe";
+            default: return "target";
         }
     }
 
@@ -171,8 +267,6 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         if (GameManager.instance.currentPhase != GameManager.GamePhase.Recruit || GameManager.instance.isUnconscious) 
             return;
             
-        // FIX: Convert Screen Point (Mouse) to World Point (Canvas)
-        // This works for Screen Space - Overlay AND Screen Space - Camera
         if (canvasTransform != null)
         {
             Vector2 localPoint;
@@ -182,13 +276,10 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
                 GetComponentInParent<Canvas>().worldCamera, 
                 out localPoint
             );
-            
-            // Apply the converted position
             transform.position = canvasTransform.TransformPoint(localPoint);
         }
         else
         {
-            // Fallback (Old way)
             transform.position = eventData.position;
         }
     }

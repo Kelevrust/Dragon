@@ -28,9 +28,9 @@ public class UnitData : ScriptableObject
     public int baseHealth;
     
     [Header("Keywords")]
-    public bool hasTaunt;        // NEW
-    public bool hasDivineShield; // NEW
-    public bool hasReborn;       // NEW
+    public bool hasTaunt;
+    public bool hasDivineShield;
+    public bool hasReborn;
     
     [Header("Flavor")]
     public Tribe tribe;
@@ -41,5 +41,6 @@ public class UnitData : ScriptableObject
     [Header("Visuals")]
     public Sprite artwork; 
     public Color frameColor = Color.gray;
-    public GameObject unitModelPrefab; 
+    public GameObject unitModelPrefab;
+    public GameObject attackProjectilePrefab; // NEW: Projectile to fire on attack
 }
