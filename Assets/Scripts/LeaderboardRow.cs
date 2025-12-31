@@ -1,34 +1,37 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
-using System.Collections; // Required for Coroutines
+using System.Collections;
+using UnityEngine.EventSystems; // Required for Tooltip events
 
-public class LeaderboardRow : MonoBehaviour
+public class LeaderboardRow : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
 {
     [Header("UI References")]
     public Image portraitImage;
     public TMP_Text nameText;
     
-    // CHANGED: Replaced Slider with Image for smoother "Filled" animation
     public Image healthBarFill; 
     
-    public Image healthFillImage; // Optional: If you want to tint a separate image (or just use healthBarFill)
+    public Image healthFillImage; 
     public Image backgroundImage; 
     public GameObject deadIcon;   
 
     [Header("Settings")]
     public Color playerColor = Color.green;
     public Color enemyColor = Color.white;
-    public Color opponentColor = new Color(1f, 0.5f, 0f); // Orange
+    public Color opponentColor = new Color(1f, 0.5f, 0f); 
     public Color deadColor = Color.gray;
     
     [Header("Animation")]
-    public float fillSpeed = 5.0f; // How fast the bar drains
+    public float fillSpeed = 5.0f; 
 
     private Coroutine fillCoroutine;
+    private string tooltipContent; // Stores the Tribe data
 
-    public void Setup(string name, int health, int maxHealth, bool isDead, bool isPlayer, bool isOpponent, Sprite portrait)
+    public void Setup(string name, int health, int maxHealth, bool isDead, bool isPlayer, bool isOpponent, Sprite portrait, string tooltipData)
     {
+        tooltipContent = tooltipData; // Store for mouseover
+
         // 1. Text
         if (nameText != null)
         {
@@ -41,8 +44,6 @@ public class LeaderboardRow : MonoBehaviour
         {
             float targetAmount = (float)health / maxHealth;
             
-            // If this is the first initialization (e.g. object just created), set instantly
-            // Otherwise, animate to the new value
             if (healthBarFill.fillAmount == 0 && health > 0) 
             {
                  healthBarFill.fillAmount = targetAmount;
@@ -54,10 +55,8 @@ public class LeaderboardRow : MonoBehaviour
             }
         }
 
-        // 3. Health Color (Green -> Red gradient)
-        // If you didn't assign a separate "Fill Image", we color the bar itself
+        // 3. Health Color
         Image targetColorImg = healthFillImage != null ? healthFillImage : healthBarFill;
-        
         if (targetColorImg != null && !isDead)
         {
             float hpPercent = (float)health / maxHealth;
@@ -87,15 +86,34 @@ public class LeaderboardRow : MonoBehaviour
     {
         float current = healthBarFill.fillAmount;
         float t = 0f;
-        
         while (Mathf.Abs(current - targetAmount) > 0.01f)
         {
             t += Time.deltaTime * fillSpeed;
-            // Lerp gives it that nice "slow down as it gets closer" feel
             healthBarFill.fillAmount = Mathf.Lerp(current, targetAmount, t);
             yield return null;
         }
-        
         healthBarFill.fillAmount = targetAmount;
+    }
+
+    // --- TOOLTIP EVENTS ---
+    public void OnPointerEnter(PointerEventData eventData)
+    {
+        if (TooltipManager.instance != null && !string.IsNullOrEmpty(tooltipContent))
+        {
+            // Use existing Unit Tooltip logic but repurpose it? 
+            // Or create a simple text tooltip method in TooltipManager.
+            // For now, let's assume TooltipManager has a ShowSimpleText method.
+            // If not, we should probably add one or just use the console for now.
+            // *Assuming you have a simple tooltip method, if not I'll add one below*
+            TooltipManager.instance.ShowSimpleTooltip(tooltipContent, transform.position);
+        }
+    }
+
+    public void OnPointerExit(PointerEventData eventData)
+    {
+        if (TooltipManager.instance != null)
+        {
+            TooltipManager.instance.HideTooltip();
+        }
     }
 }

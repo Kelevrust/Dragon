@@ -1,7 +1,7 @@
 using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
-using TMPro; 
+using TMPro;
 using System.Text; 
 
 public class CombatManager : MonoBehaviour
@@ -9,7 +9,9 @@ public class CombatManager : MonoBehaviour
     public static CombatManager instance;
 
     [Header("Game Pace")]
+    [Tooltip("Time between attacks. Lower is faster.")]
     public float combatPace = 0.5f; 
+    [Tooltip("Time to wait before returning to shop.")]
     public float shopReturnDelay = 1.0f;
 
     [Header("Audio FX")]
@@ -53,7 +55,12 @@ public class CombatManager : MonoBehaviour
     {
         if (GameManager.instance.currentPhase != GameManager.GamePhase.Recruit) return;
 
-        if (shopContainer != null) foreach (Transform child in shopContainer) Destroy(child.gameObject);
+        // --- FREEZE FIX: HIDE SHOP ONLY ---
+        if (shopContainer != null) 
+        {
+            // Do NOT Destroy children here. Just hide the container.
+            shopContainer.gameObject.SetActive(false);
+        }
         
         SaveRoster();
         GameManager.instance.currentPhase = GameManager.GamePhase.Combat;
@@ -61,7 +68,7 @@ public class CombatManager : MonoBehaviour
         if (LobbyManager.instance != null)
         {
             var opponent = LobbyManager.instance.GetNextOpponent();
-            if (opponent != null) Debug.Log($"<color=orange>Fighting Opponent: {opponent.name}</color>");
+            if (opponent != null) Debug.Log($"<color=orange>Fighting Opponent: {opponent.name} | {opponent.rank} ({opponent.mmr})</color>");
         }
 
         if (AudioManager.instance != null) AudioManager.instance.PlaySFX(combatStartClip);
@@ -70,20 +77,26 @@ public class CombatManager : MonoBehaviour
         StartCoroutine(CombatRoutine());
     }
 
-    // ... (SaveRoster, SpawnEnemies, CombatRoutine, AnimateAttack, GetUnits, EndCombat, ForceReturnToShop, ReturnToShopRoutine remain same) ...
-    // NOTE: Keep the rest of the file! Only replacing KillUnit below.
-
     void SaveRoster()
     {
         savedPlayerRoster.Clear();
-        foreach (Transform child in playerBoard) SaveUnitFromTransform(child, false);
+        int goldenCount = 0;
+
+        foreach (Transform child in playerBoard) 
+        {
+            if (SaveUnitFromTransform(child, false)) goldenCount++;
+        }
         if (GameManager.instance.playerHand != null)
         {
-            foreach (Transform child in GameManager.instance.playerHand) SaveUnitFromTransform(child, true);
+            foreach (Transform child in GameManager.instance.playerHand)
+            {
+                if (SaveUnitFromTransform(child, true)) goldenCount++;
+            }
         }
+        Debug.Log($"Saved Roster: {savedPlayerRoster.Count} Units ({goldenCount} Golden).");
     }
 
-    void SaveUnitFromTransform(Transform t, bool inHand)
+    bool SaveUnitFromTransform(Transform t, bool inHand)
     {
         CardDisplay cd = t.GetComponent<CardDisplay>();
         if (cd != null) 
@@ -95,7 +108,9 @@ public class CombatManager : MonoBehaviour
             snap.permHealth = cd.permanentHealth;
             snap.wasInHand = inHand;
             savedPlayerRoster.Add(snap);
+            return snap.isGolden;
         }
+        return false;
     }
 
     void SpawnEnemies()
@@ -231,7 +246,6 @@ public class CombatManager : MonoBehaviour
         return defenders[Random.Range(0, defenders.Count)];
     }
 
-    // --- FIX IS HERE ---
     void HandleDeath(CardDisplay unit, List<CardDisplay> list)
     {
         if (unit.hasReborn)
@@ -243,14 +257,11 @@ public class CombatManager : MonoBehaviour
 
         if (AudioManager.instance != null) AudioManager.instance.PlaySFX(deathClip);
 
-        // 1. Capture the board reference
         Transform oldBoard = unit.transform.parent;
 
-        // 2. MOVE FIRST (Clear the slot)
         if (graveyard != null) unit.transform.SetParent(graveyard);
         unit.gameObject.SetActive(false); 
 
-        // 3. TRIGGER AFTER MOVE (Now there is space)
         if (AbilityManager.instance != null)
         {
             try 
@@ -261,7 +272,6 @@ public class CombatManager : MonoBehaviour
             catch (System.Exception e) { Debug.LogError($"Deathrattle error: {e.Message}"); }
         }
 
-        // 4. Remove from list & Destroy
         list.Remove(unit);
         Destroy(unit.gameObject);
     }
@@ -376,21 +386,27 @@ public class CombatManager : MonoBehaviour
             LobbyManager.instance.ReportPlayerVsBotResult(playerWon, damageDealt);
             LobbyManager.instance.SimulateRoundForBots(GameManager.instance.turnNumber);
             
-            // NEW: Check for Victory (Last Man Standing)
             if (LobbyManager.instance.GetNextOpponent() == null)
             {
                 Debug.Log("Victory! No opponents remaining.");
                 if (DeathSaveManager.instance != null) 
                 {
-                     GameManager.instance.currentPhase = GameManager.GamePhase.Death; // Stop logic
+                     GameManager.instance.currentPhase = GameManager.GamePhase.Death;
                      DeathSaveManager.instance.TriggerVictory();
                 }
-                return; // STOP HERE. Do not return to shop.
+                return; 
             }
         }
 
-        if (GameManager.instance.playerHealth <= 0) DeathSaveManager.instance.StartDeathSequence();
-        else StartCoroutine(ReturnToShopRoutine());
+        if (GameManager.instance.playerHealth <= 0) 
+        {
+            GameManager.instance.currentPhase = GameManager.GamePhase.Death;
+            DeathSaveManager.instance.StartDeathSequence();
+        }
+        else 
+        {
+            StartCoroutine(ReturnToShopRoutine());
+        }
     }
 
     public void ForceReturnToShop() { StartCoroutine(ReturnToShopRoutine()); }
@@ -410,6 +426,12 @@ public class CombatManager : MonoBehaviour
             Destroy(g);
         }
         playerBoard.DetachChildren(); 
+
+        // --- FREEZE FIX: SHOW SHOP AGAIN ---
+        if (shopContainer != null) 
+        {
+            shopContainer.gameObject.SetActive(true);
+        }
 
         List<CardDisplay> spawnedCards = new List<CardDisplay>();
 
@@ -449,7 +471,7 @@ public class CombatManager : MonoBehaviour
         if (shop != null) 
         {
             shop.ReduceUpgradeCost();
-            shop.RerollShop();
+            shop.HandleTurnStartRefresh(); 
         }
         
         Debug.Log("--- RETURN TO SHOP ---");

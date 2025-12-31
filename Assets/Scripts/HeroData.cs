@@ -1,27 +1,28 @@
 using UnityEngine;
+using System.Collections.Generic;
 
-public enum HeroBonusType 
-{ 
-    None, ExtraHealth, ExtraGold, StartingUnit 
-}
+public enum HeroBonusType { None, ExtraHealth, ExtraGold, StartingUnit }
 
 [CreateAssetMenu(fileName = "New Hero", menuName = "DnD Battler/Hero Data")]
 public class HeroData : ScriptableObject
 {
-    [Header("Visuals")]
+    public string id;
     public string heroName;
-    [TextArea] public string description;
     public Sprite heroPortrait;
-
-    [Header("Passive Bonus")]
-    public HeroBonusType bonusType;
-    [Tooltip("Amount of Gold or Health to add")]
-    public int bonusValue; 
-    [Tooltip("Only used if Bonus Type is StartingUnit")]
-    public UnitData startingUnit; 
-
+    
     [Header("Hero Power")]
-    public string powerName = "Hero Power";
+    public string powerName;
     public int powerCost = 2;
-    public AbilityData powerAbility; // Drag an AbilityData file here
+    public AbilityData powerAbility;
+    
+    [Header("Passive Bonuses")]
+    public HeroBonusType bonusType;
+    public int bonusValue;
+    public UnitData startingUnit;
+
+    [Header("Visuals")]
+    // NEW: Thematic Freeze mechanics
+    [Tooltip("VFX to spawn on EACH shop card when frozen (e.g. Chains, Candy, Fear Icon)")]
+    public GameObject freezeVFXPrefab; 
+    public AudioClip freezeSound;      
 }

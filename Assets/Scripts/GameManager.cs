@@ -3,7 +3,8 @@ using TMPro;
 using System.Collections.Generic;
 using UnityEngine.UI; 
 using System.Text; 
-using UnityEngine.SceneManagement; 
+using UnityEngine.SceneManagement;
+using UnityEngine.InputSystem; // NEW: Required for New Input System
 
 public class GameManager : MonoBehaviour
 {
@@ -27,8 +28,8 @@ public class GameManager : MonoBehaviour
     [Tooltip("If true, gain 1 gold per 10 held (max 5) at start of turn.")]
     public bool enableInterest = false;
     public int interestCap = 5;
-    public int baseIncome = 5; // Used only if carryover is enabled
-    public int bankBalance = 0; // Stored gold separate from active hand
+    public int baseIncome = 5; 
+    public int bankBalance = 0; 
     
     [Header("Phase Settings")]
     public float recruitTime = 60f;
@@ -94,11 +95,9 @@ public class GameManager : MonoBehaviour
         }
         else if (PlayerProfile.instance != null)
         {
-            // Human Player
             logDetails = $"MMR {PlayerProfile.instance.mmr}";
         }
 
-        // Exact format requested: "Game start Player - AI - MMR 4591 w/ oppenents distribution @500"
         string fullLog = $"Player - {playerType} - {logDetails}";
         Debug.Log($"<color=magenta>[SESSION START]</color> {fullLog}");
 
@@ -112,13 +111,16 @@ public class GameManager : MonoBehaviour
 
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.Escape))
+        // --- UPDATED INPUT SYSTEM LOGIC ---
+        // Replace Input.GetKeyDown with Keyboard.current...
+        if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
         {
             if (isTargetingMode) CancelTargeting();
             else TogglePauseMenu();
         }
 
-        if (isTargetingMode && Input.GetMouseButtonDown(1))
+        // Replace Input.GetMouseButtonDown(1) with Mouse.current.rightButton...
+        if (isTargetingMode && Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame)
         {
             CancelTargeting();
         }
@@ -237,7 +239,6 @@ public class GameManager : MonoBehaviour
             SpawnUnitOnBoard(activeHero.startingUnit);
         }
 
-        // Note: New Economy traits (Interest/Carryover) would be checked here in a full HeroData impl
         UpdateUI();
     }
 
@@ -255,27 +256,23 @@ public class GameManager : MonoBehaviour
 
         // --- ECONOMY CALCULATION ---
         int standardTurnCap = Mathf.Min(3 + turnNumber, 10);
-        maxGold = standardTurnCap; // Used for UI reference
+        maxGold = standardTurnCap; 
 
         if (enableGoldCarryover)
         {
-            // Accumulation Mode (PvE / Specific Heroes)
             int interest = 0;
             if (enableInterest)
             {
                 interest = Mathf.Min(gold / 10, interestCap);
                 if (interest > 0) LogAction($"Gained {interest} Gold from Interest.");
             }
-            
             gold += baseIncome + interest;
         }
         else
         {
-            // Reset Mode (Standard PvP)
             gold = maxGold;
         }
 
-        // Hero Specific Bonuses
         if (activeHero != null && 
             activeHero.bonusType == HeroBonusType.ExtraGold && 
             turnNumber == 1)
@@ -303,7 +300,7 @@ public class GameManager : MonoBehaviour
         return false;
     }
 
-    // --- BANKING API (For Future Traits) ---
+    // --- BANKING API ---
     public bool DepositToBank(int amount)
     {
         if (gold >= amount)
@@ -656,7 +653,6 @@ public class GameManager : MonoBehaviour
     {
         if (goldText != null)
         {
-            // If in Carryover mode, show total gold. Otherwise show X/Max
             if (enableGoldCarryover)
             {
                 string bankText = bankBalance > 0 ? $" (+{bankBalance} Bank)" : "";

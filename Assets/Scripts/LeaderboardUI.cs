@@ -7,14 +7,13 @@ using System.Linq;
 public class LeaderboardUI : MonoBehaviour
 {
     [Header("Visuals")]
-    public LeaderboardRow rowPrefab; // CHANGED: Now expects the script component
+    public LeaderboardRow rowPrefab; 
     public Transform contentContainer; 
 
     public void UpdateDisplay()
     {
         if (LobbyManager.instance == null) return;
 
-        // Clear existing
         foreach (Transform child in contentContainer)
         {
             Destroy(child.gameObject);
@@ -29,27 +28,29 @@ public class LeaderboardUI : MonoBehaviour
             maxHealth = GameManager.instance.maxPlayerHealth,
             isDead = GameManager.instance.playerHealth <= 0,
             isPlayer = true,
-            portrait = GameManager.instance.activeHero != null ? GameManager.instance.activeHero.heroPortrait : null
+            portrait = GameManager.instance.activeHero != null ? GameManager.instance.activeHero.heroPortrait : null,
+            tooltip = "You are here."
         });
 
         // Add Bots
         foreach (var bot in LobbyManager.instance.opponents)
         {
+            string tribeInfo = GetPrimaryTribeInfo(bot);
+
             allEntries.Add(new LeaderboardEntry { 
                 name = bot.name, 
                 health = bot.health, 
-                maxHealth = 30, // Bots default max
+                maxHealth = 30, 
                 isDead = bot.isDead,
                 isPlayer = false,
                 isCurrentOpponent = (bot == LobbyManager.instance.currentOpponent),
-                portrait = bot.heroPortrait
+                portrait = bot.heroPortrait,
+                tooltip = $"{bot.heroName}\nRank: {bot.rank}\n{tribeInfo}"
             });
         }
 
-        // Sort: Dead at bottom, then by Health descending
         var sorted = allEntries.OrderBy(x => x.isDead).ThenByDescending(x => x.health).ToList();
 
-        // Render
         foreach (var entry in sorted)
         {
             LeaderboardRow row = Instantiate(rowPrefab, contentContainer);
@@ -61,9 +62,29 @@ public class LeaderboardUI : MonoBehaviour
                 entry.isDead, 
                 entry.isPlayer, 
                 entry.isCurrentOpponent,
-                entry.portrait
+                entry.portrait,
+                entry.tooltip // Pass the generated string
             );
         }
+    }
+
+    string GetPrimaryTribeInfo(LobbyManager.Opponent bot)
+    {
+        if (bot.roster == null || bot.roster.Count == 0) return "Empty Board";
+
+        // Group units by Tribe, filter out None, sort by count descending
+        var tribeGroup = bot.roster
+            .Where(u => u != null && u.tribe != Tribe.None)
+            .GroupBy(u => u.tribe)
+            .OrderByDescending(g => g.Count())
+            .FirstOrDefault();
+
+        if (tribeGroup != null)
+        {
+            return $"Build: {tribeGroup.Key} ({tribeGroup.Count()})";
+        }
+        
+        return "Build: Mixed";
     }
 
     struct LeaderboardEntry
@@ -75,5 +96,6 @@ public class LeaderboardUI : MonoBehaviour
         public bool isPlayer;
         public bool isCurrentOpponent;
         public Sprite portrait;
+        public string tooltip;
     }
 }

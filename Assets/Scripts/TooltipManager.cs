@@ -118,6 +118,9 @@ public class TooltipManager : MonoBehaviour
         if (bigCardVisual == null) return;
 
         currentTarget = sourceCard;
+        
+        // Restore Card Mode (Show Image, Stats)
+        SetVisualMode(true);
 
         bigCardVisual.LoadUnit(sourceCard.unitData);
         bigCardVisual.currentAttack = sourceCard.currentAttack;
@@ -206,5 +209,65 @@ public class TooltipManager : MonoBehaviour
     {
         currentTarget = null;
         if (tooltipRoot != null) tooltipRoot.SetActive(false);
+    }
+    
+    // --- LEADERBOARD TOOLTIP SUPPORT ---
+
+    public void ShowSimpleTooltip(string content, Vector2 position)
+    {
+        if (tooltipRoot == null || bigCardVisual == null) return;
+        
+        // Stop tracking units
+        currentTarget = null;
+        
+        tooltipRoot.SetActive(true);
+        tooltipRoot.transform.localScale = Vector3.one;
+
+        // Hide visuals to look like a text box
+        SetVisualMode(false);
+
+        // Set Text
+        if (bigCardVisual.nameText != null) bigCardVisual.nameText.text = "Player Info";
+        if (bigCardVisual.descriptionText != null) bigCardVisual.descriptionText.text = content;
+
+        // Position manually since we aren't tracking a Transform
+        if (rootRect != null)
+        {
+            rootRect.position = position;
+            
+            // Pivot logic based on screen side
+            float screenCenterX = Screen.width / 2f;
+            bool onLeft = position.x < screenCenterX;
+            rootRect.pivot = new Vector2(onLeft ? -0.1f : 1.1f, 0.5f);
+            
+            LayoutRebuilder.ForceRebuildLayoutImmediate(rootRect);
+        }
+
+        // Hide Side Panel
+        if (buffContainer != null) buffContainer.SetActive(false);
+        if (buffPanelBackground != null) buffPanelBackground.gameObject.SetActive(false);
+    }
+
+    public void HideTooltip()
+    {
+        Hide();
+    }
+
+    void SetVisualMode(bool isCard)
+    {
+        if (bigCardVisual == null) return;
+        
+        // Toggle Image
+        if (bigCardVisual.artworkImage != null) bigCardVisual.artworkImage.gameObject.SetActive(isCard);
+        
+        // Toggle Stats (Parent usually holds the icon background)
+        if (bigCardVisual.attackText != null && bigCardVisual.attackText.transform.parent != null) 
+            bigCardVisual.attackText.transform.parent.gameObject.SetActive(isCard);
+            
+        if (bigCardVisual.healthText != null && bigCardVisual.healthText.transform.parent != null) 
+            bigCardVisual.healthText.transform.parent.gameObject.SetActive(isCard);
+            
+        if (bigCardVisual.tribeBanner != null) 
+            bigCardVisual.tribeBanner.gameObject.SetActive(isCard);
     }
 }
