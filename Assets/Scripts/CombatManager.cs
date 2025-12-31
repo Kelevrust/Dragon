@@ -2,15 +2,14 @@ using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
 using TMPro; 
+using System.Text; 
 
 public class CombatManager : MonoBehaviour
 {
     public static CombatManager instance;
 
     [Header("Game Pace")]
-    [Tooltip("Time between attacks. Lower is faster.")]
     public float combatPace = 0.5f; 
-    [Tooltip("Time to wait before returning to shop.")]
     public float shopReturnDelay = 1.0f;
 
     [Header("Audio FX")]
@@ -59,11 +58,10 @@ public class CombatManager : MonoBehaviour
         SaveRoster();
         GameManager.instance.currentPhase = GameManager.GamePhase.Combat;
         
-        // PvP Lobby Logic: Pick opponent
         if (LobbyManager.instance != null)
         {
             var opponent = LobbyManager.instance.GetNextOpponent();
-            if (opponent != null) Debug.Log($"<color=orange>Fighting Opponent: {opponent.name} (Tier {opponent.tavernTier})</color>");
+            if (opponent != null) Debug.Log($"<color=orange>Fighting Opponent: {opponent.name}</color>");
         }
 
         if (AudioManager.instance != null) AudioManager.instance.PlaySFX(combatStartClip);
@@ -71,6 +69,9 @@ public class CombatManager : MonoBehaviour
         SpawnEnemies(); 
         StartCoroutine(CombatRoutine());
     }
+
+    // ... (SaveRoster, SpawnEnemies, CombatRoutine, AnimateAttack, GetUnits, EndCombat, ForceReturnToShop, ReturnToShopRoutine remain same) ...
+    // NOTE: Keep the rest of the file! Only replacing KillUnit below.
 
     void SaveRoster()
     {
@@ -94,8 +95,6 @@ public class CombatManager : MonoBehaviour
             snap.permHealth = cd.permanentHealth;
             snap.wasInHand = inHand;
             savedPlayerRoster.Add(snap);
-
-            if (snap.isGolden) Debug.Log($"Saving GOLDEN status for {snap.template.unitName} (In Hand: {inHand})");
         }
     }
 
@@ -103,25 +102,16 @@ public class CombatManager : MonoBehaviour
     {
         foreach (Transform child in enemyBoard) Destroy(child.gameObject);
 
-        List<UnitData> enemyRoster = new List<UnitData>();
-
-        // 1. Try to get persistent bot roster
-        if (LobbyManager.instance != null && LobbyManager.instance.currentOpponent != null)
+        AIManager ai = AIManager.instance;
+        if (ai != null)
         {
-            enemyRoster = LobbyManager.instance.currentOpponent.roster;
-        }
-        // 2. Fallback to procedural generation (if no lobby or error)
-        else if (AIManager.instance != null)
-        {
-            enemyRoster = AIManager.instance.GenerateEnemyBoard(GameManager.instance.turnNumber);
-        }
-
-        foreach (UnitData data in enemyRoster)
-        {
-            GameObject newCard = Instantiate(cardPrefab, enemyBoard);
-            newCard.GetComponent<CardDisplay>().LoadUnit(data);
-            Destroy(newCard.GetComponent<UnityEngine.UI.Button>()); 
-            // Note: In a full version, we would also need to load the bot's buffed stats/golden status here
+            List<UnitData> enemyRoster = ai.GenerateEnemyBoard(GameManager.instance.turnNumber);
+            foreach (UnitData data in enemyRoster)
+            {
+                GameObject newCard = Instantiate(cardPrefab, enemyBoard);
+                newCard.GetComponent<CardDisplay>().LoadUnit(data);
+                Destroy(newCard.GetComponent<UnityEngine.UI.Button>()); 
+            }
         }
     }
 
@@ -134,9 +124,12 @@ public class CombatManager : MonoBehaviour
 
         Dictionary<CardDisplay, int> combatHealths = new Dictionary<CardDisplay, int>();
         Dictionary<CardDisplay, int> combatAttacks = new Dictionary<CardDisplay, int>();
+        Dictionary<CardDisplay, bool> currentShields = new Dictionary<CardDisplay, bool>();
 
-        foreach (var p in players) { combatHealths[p] = p.currentHealth; combatAttacks[p] = p.currentAttack; }
-        foreach (var e in enemies) { combatHealths[e] = e.currentHealth; combatAttacks[e] = e.currentAttack; }
+        foreach (var p in players) { combatHealths[p] = p.currentHealth; combatAttacks[p] = p.currentAttack; currentShields[p] = p.hasDivineShield; }
+        foreach (var e in enemies) { combatHealths[e] = e.currentHealth; combatAttacks[e] = e.currentAttack; currentShields[e] = e.hasDivineShield; }
+
+        int round = 1;
 
         while (players.Count > 0 && enemies.Count > 0)
         {
@@ -144,32 +137,72 @@ public class CombatManager : MonoBehaviour
             enemies = GetUnits(enemyBoard);
             if (players.Count == 0 || enemies.Count == 0) break;
 
-            CardDisplay pUnit = players[0];
-            CardDisplay eUnit = enemies[0];
+            CardDisplay pAttacker = players[0];
+            CardDisplay eAttacker = enemies[0];
+            
+            CardDisplay targetOfPlayer = GetTarget(enemies); 
+            CardDisplay targetOfEnemy = GetTarget(players);  
 
-            if (!combatHealths.ContainsKey(pUnit)) { combatHealths[pUnit] = pUnit.currentHealth; combatAttacks[pUnit] = pUnit.currentAttack; }
-            if (!combatHealths.ContainsKey(eUnit)) { combatHealths[eUnit] = eUnit.currentHealth; combatAttacks[eUnit] = eUnit.currentAttack; }
+            // Sync dynamic tokens
+            if (!combatHealths.ContainsKey(pAttacker)) { combatHealths[pAttacker] = pAttacker.currentHealth; combatAttacks[pAttacker] = pAttacker.currentAttack; currentShields[pAttacker] = pAttacker.hasDivineShield; }
+            if (!combatHealths.ContainsKey(eAttacker)) { combatHealths[eAttacker] = eAttacker.currentHealth; combatAttacks[eAttacker] = eAttacker.currentAttack; currentShields[eAttacker] = eAttacker.hasDivineShield; }
+            if (!combatHealths.ContainsKey(targetOfPlayer)) { combatHealths[targetOfPlayer] = targetOfPlayer.currentHealth; combatAttacks[targetOfPlayer] = targetOfPlayer.currentAttack; currentShields[targetOfPlayer] = targetOfPlayer.hasDivineShield; }
+            if (!combatHealths.ContainsKey(targetOfEnemy)) { combatHealths[targetOfEnemy] = targetOfEnemy.currentHealth; combatAttacks[targetOfEnemy] = targetOfEnemy.currentAttack; currentShields[targetOfEnemy] = targetOfEnemy.hasDivineShield; }
 
-            yield return StartCoroutine(AnimateAttack(pUnit.transform, eUnit.transform));
-            yield return StartCoroutine(AnimateAttack(eUnit.transform, pUnit.transform));
+            yield return StartCoroutine(AnimateAttack(pAttacker.transform, targetOfPlayer.transform));
+            yield return StartCoroutine(AnimateAttack(eAttacker.transform, targetOfEnemy.transform));
 
             if (AudioManager.instance != null) AudioManager.instance.PlaySFX(hitClip);
 
-            int pDmg = combatAttacks[eUnit];
-            int eDmg = combatAttacks[pUnit];
+            int damageFromPlayer = combatAttacks[pAttacker];
+            int damageFromEnemy = combatAttacks[eAttacker];
 
-            combatHealths[pUnit] -= pDmg;
-            combatHealths[eUnit] -= eDmg;
+            StringBuilder roundLog = new StringBuilder();
+            roundLog.Append($"<b>Round {round}</b>: ");
 
-            UpdateCombatVisuals(pUnit, combatHealths[pUnit]);
-            UpdateCombatVisuals(eUnit, combatHealths[eUnit]);
+            string pLog = $"[P] {pAttacker.unitData.unitName} -> {targetOfPlayer.unitData.unitName}";
+            if (currentShields[targetOfPlayer] && damageFromPlayer > 0)
+            {
+                currentShields[targetOfPlayer] = false;
+                targetOfPlayer.BreakShield(); 
+                pLog += " (Blocked)";
+                damageFromPlayer = 0; 
+            }
+            combatHealths[targetOfPlayer] -= damageFromPlayer;
+            pLog += $" ({damageFromPlayer} dmg)";
 
-            bool pDies = combatHealths[pUnit] <= 0;
-            bool eDies = combatHealths[eUnit] <= 0;
+            string eLog = $"[E] {eAttacker.unitData.unitName} -> {targetOfEnemy.unitData.unitName}";
+            if (currentShields[targetOfEnemy] && damageFromEnemy > 0)
+            {
+                currentShields[targetOfEnemy] = false;
+                targetOfEnemy.BreakShield();
+                eLog += " (Blocked)";
+                damageFromEnemy = 0;
+            }
+            combatHealths[targetOfEnemy] -= damageFromEnemy;
+            eLog += $" ({damageFromEnemy} dmg)";
 
-            if (eDies) KillUnit(eUnit, enemies, true);
-            if (pDies) KillUnit(pUnit, players, false);
+            roundLog.Append($"{pLog} | {eLog}. ");
 
+            UpdateCombatVisuals(targetOfPlayer, combatHealths[targetOfPlayer]);
+            UpdateCombatVisuals(targetOfEnemy, combatHealths[targetOfEnemy]);
+
+            bool enemyDies = combatHealths[targetOfPlayer] <= 0;
+            bool playerDies = combatHealths[targetOfEnemy] <= 0;
+
+            if (enemyDies) 
+            {
+                roundLog.Append($"<color=red>{targetOfPlayer.unitData.unitName} DIED</color>. ");
+                HandleDeath(targetOfPlayer, enemies);
+            }
+            if (playerDies) 
+            {
+                roundLog.Append($"<color=red>{targetOfEnemy.unitData.unitName} DIED</color>. ");
+                HandleDeath(targetOfEnemy, players);
+            }
+
+            Debug.Log(roundLog.ToString());
+            round++;
             yield return new WaitForSeconds(combatPace);
         }
 
@@ -186,22 +219,38 @@ public class CombatManager : MonoBehaviour
         EndCombat(players.Count > 0, damageTaken);
     }
 
-    void UpdateCombatVisuals(CardDisplay unit, int currentHp)
+    CardDisplay GetTarget(List<CardDisplay> defenders)
     {
-        if (unit.healthText == null) return;
-        unit.healthText.text = currentHp.ToString();
-        int maxHp = unit.isGolden ? unit.unitData.baseHealth * 2 : unit.unitData.baseHealth;
-        if (currentHp < unit.permanentHealth) unit.healthText.color = Color.red;
-        else if (currentHp > maxHp) unit.healthText.color = Color.green;
-        else unit.healthText.color = Color.black;
+        List<CardDisplay> taunts = new List<CardDisplay>();
+        foreach(var d in defenders)
+        {
+            if (d.unitData.hasTaunt) taunts.Add(d);
+        }
+
+        if (taunts.Count > 0) return taunts[Random.Range(0, taunts.Count)];
+        return defenders[Random.Range(0, defenders.Count)];
     }
 
-    void KillUnit(CardDisplay unit, List<CardDisplay> list, bool isEnemy)
+    // --- FIX IS HERE ---
+    void HandleDeath(CardDisplay unit, List<CardDisplay> list)
     {
+        if (unit.hasReborn)
+        {
+            Debug.Log($"{unit.unitData.unitName} Reborn triggered!");
+            unit.hasReborn = false;
+            return;
+        }
+
         if (AudioManager.instance != null) AudioManager.instance.PlaySFX(deathClip);
 
+        // 1. Capture the board reference
         Transform oldBoard = unit.transform.parent;
 
+        // 2. MOVE FIRST (Clear the slot)
+        if (graveyard != null) unit.transform.SetParent(graveyard);
+        unit.gameObject.SetActive(false); 
+
+        // 3. TRIGGER AFTER MOVE (Now there is space)
         if (AbilityManager.instance != null)
         {
             try 
@@ -212,10 +261,19 @@ public class CombatManager : MonoBehaviour
             catch (System.Exception e) { Debug.LogError($"Deathrattle error: {e.Message}"); }
         }
 
+        // 4. Remove from list & Destroy
         list.Remove(unit);
-        if (graveyard != null) unit.transform.SetParent(graveyard);
-        unit.gameObject.SetActive(false);
         Destroy(unit.gameObject);
+    }
+
+    void UpdateCombatVisuals(CardDisplay unit, int currentHp)
+    {
+        if (unit.healthText == null) return;
+        unit.healthText.text = currentHp.ToString();
+        int maxHp = unit.isGolden ? unit.unitData.baseHealth * 2 : unit.unitData.baseHealth;
+        if (currentHp < unit.permanentHealth) unit.healthText.color = Color.red;
+        else if (currentHp > maxHp) unit.healthText.color = Color.green;
+        else unit.healthText.color = Color.black;
     }
 
     IEnumerator AnimateAttack(Transform attacker, Transform target)
@@ -306,7 +364,6 @@ public class CombatManager : MonoBehaviour
             AnalyticsManager.instance.TrackRoundResult(GameManager.instance.turnNumber, playerWon, damageTaken, GameManager.instance.playerHealth);
         GameManager.instance.LogGameState($"Post-Combat (Damage: {damageTaken})");
 
-        // PvP Update
         if (LobbyManager.instance != null)
         {
             int damageDealt = 0;
@@ -317,9 +374,19 @@ public class CombatManager : MonoBehaviour
                 foreach(var s in survivors) damageDealt += s.unitData.tier;
             }
             LobbyManager.instance.ReportPlayerVsBotResult(playerWon, damageDealt);
-            
-            // SIMULATE other battles
             LobbyManager.instance.SimulateRoundForBots(GameManager.instance.turnNumber);
+            
+            // NEW: Check for Victory (Last Man Standing)
+            if (LobbyManager.instance.GetNextOpponent() == null)
+            {
+                Debug.Log("Victory! No opponents remaining.");
+                if (DeathSaveManager.instance != null) 
+                {
+                     GameManager.instance.currentPhase = GameManager.GamePhase.Death; // Stop logic
+                     DeathSaveManager.instance.TriggerVictory();
+                }
+                return; // STOP HERE. Do not return to shop.
+            }
         }
 
         if (GameManager.instance.playerHealth <= 0) DeathSaveManager.instance.StartDeathSequence();

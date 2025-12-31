@@ -2,13 +2,14 @@ using UnityEngine;
 
 public enum AbilityTrigger
 {
-    OnPlay,         // Battlecry
+    OnPlay,         // Battlecry (Self)
     OnDeath,        // Deathrattle
     OnTurnStart,    // Passive scaling
     OnDamageTaken,  // Enrage
     PassiveAura,    // Constant effect
     OnHeroPower,    // Active button
-    OnAllyDeath     // Scavenge
+    OnAllyDeath,    // Scavenge
+    OnAllyPlay      // NEW: Synergy (Spark Plug)
 }
 
 public enum AbilityTarget
@@ -37,18 +38,17 @@ public enum AbilityEffect
 
 public enum AbilitySpawnLocation
 {
-    BoardOnly,      // If board full, fail
-    HandOnly,       // Add to hand
-    BoardThenHand,  // Try board, fallback to hand
-    ReplaceTarget   // For polymorph/sacrifice effects
+    BoardOnly,      
+    HandOnly,       
+    BoardThenHand,  
+    ReplaceTarget   
 }
 
-// NEW: Where should the Visual Effect appear?
 public enum VFXSpawnPoint
 {
-    Source,         // On the unit casting the spell (e.g. Roar)
-    Target,         // On the unit receiving the effect (e.g. Explosion)
-    CenterOfBoard   // In the middle of the screen (e.g. Weather effect)
+    Source,         
+    Target,         
+    CenterOfBoard   
 }
 
 [CreateAssetMenu(fileName = "New Ability", menuName = "DnD Battler/Ability Data")]
@@ -73,9 +73,9 @@ public class AbilityData : ScriptableObject
     public UnitData tokenUnit; 
     public AbilitySpawnLocation spawnLocation;
     
-    [Header("Visuals & Audio")]
-    public GameObject vfxPrefab;
+    [Header("Visuals")]
+    public GameObject vfxPrefab; 
     public VFXSpawnPoint vfxSpawnPoint;
-    public float vfxDuration = 2.0f; // How long before the effect destroys itself
-    public AudioClip soundEffect;    // Sound to play when ability triggers
+    public float vfxDuration = 2.0f;
+    public AudioClip soundEffect;
 }

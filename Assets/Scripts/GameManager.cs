@@ -3,7 +3,7 @@ using TMPro;
 using System.Collections.Generic;
 using UnityEngine.UI; 
 using System.Text; 
-using UnityEngine.SceneManagement; // Required for loading Main Menu
+using UnityEngine.SceneManagement; 
 
 public class GameManager : MonoBehaviour
 {
@@ -21,6 +21,19 @@ public class GameManager : MonoBehaviour
     public int turnNumber = 1;
     public bool heroPowerUsed = false;
     
+    [Header("Economy Rules")]
+    [Tooltip("If true, gold is not reset to MaxGold at start of turn.")]
+    public bool enableGoldCarryover = false; 
+    [Tooltip("If true, gain 1 gold per 10 held (max 5) at start of turn.")]
+    public bool enableInterest = false;
+    public int interestCap = 5;
+    public int baseIncome = 5; // Used only if carryover is enabled
+    public int bankBalance = 0; // Stored gold separate from active hand
+    
+    [Header("Phase Settings")]
+    public float recruitTime = 60f;
+    private float currentPhaseTimer;
+    
     [Header("Player Stats")]
     public int playerHealth = 30;
     public int maxPlayerHealth = 30;
@@ -32,7 +45,11 @@ public class GameManager : MonoBehaviour
     public TMP_Text healthText; 
     public TMP_Text heroText;   
     public TMP_Text tierText;
+    public TMP_Text endTurnButtonText; 
     
+    [Header("Managers")]
+    public CombatManager combatManager;
+
     [Header("Targeting")]
     public bool isTargetingMode = false;
     public AbilityData pendingAbility; 
@@ -48,7 +65,7 @@ public class GameManager : MonoBehaviour
     public GameObject pauseMenuPanel; 
     private bool isPaused = false;
 
-    public enum GamePhase { Recruit, Combat }
+    public enum GamePhase { Recruit, Combat, Death } 
     public GamePhase currentPhase;
 
     void Awake()
@@ -62,35 +79,68 @@ public class GameManager : MonoBehaviour
         ApplyHeroBonuses();
         StartRecruitPhase();
         
-        // Ensure menu is closed at start
         if (pauseMenuPanel != null) pauseMenuPanel.SetActive(false);
         
-        // ANALYTICS: Track Game Start
+        // --- LOGGING UPDATE ---
+        string playerType = "Human";
+        string logDetails = "";
+
+        GameTester tester = FindFirstObjectByType<GameTester>();
+        if (tester != null && tester.isAutoPlaying)
+        {
+            playerType = "AI";
+            string dist = tester.distributeMMR ? $"opponents distribution @{tester.mmrVariance}" : "Fixed Distribution";
+            logDetails = $"MMR {tester.targetMMR} w/ {dist}";
+        }
+        else if (PlayerProfile.instance != null)
+        {
+            // Human Player
+            logDetails = $"MMR {PlayerProfile.instance.mmr}";
+        }
+
+        // Exact format requested: "Game start Player - AI - MMR 4591 w/ oppenents distribution @500"
+        string fullLog = $"Player - {playerType} - {logDetails}";
+        Debug.Log($"<color=magenta>[SESSION START]</color> {fullLog}");
+
         if (AnalyticsManager.instance != null && activeHero != null)
         {
-            AnalyticsManager.instance.TrackGameStart(activeHero.heroName);
+            AnalyticsManager.instance.TrackGameStart($"{activeHero.heroName} | {fullLog}");
         }
+
+        if (combatManager == null) combatManager = FindFirstObjectByType<CombatManager>();
     }
 
     void Update()
     {
-        // Handle Escape Key
         if (Input.GetKeyDown(KeyCode.Escape))
         {
-            if (isTargetingMode)
-            {
-                CancelTargeting();
-            }
-            else
-            {
-                TogglePauseMenu();
-            }
+            if (isTargetingMode) CancelTargeting();
+            else TogglePauseMenu();
         }
 
-        // Right click also cancels targeting
         if (isTargetingMode && Input.GetMouseButtonDown(1))
         {
             CancelTargeting();
+        }
+
+        if (currentPhase == GamePhase.Recruit && !isUnconscious)
+        {
+            currentPhaseTimer -= Time.deltaTime;
+            
+            if (endTurnButtonText != null)
+            {
+                endTurnButtonText.text = $"Recruit - {Mathf.CeilToInt(currentPhaseTimer)}s";
+            }
+
+            if (currentPhaseTimer <= 0)
+            {
+                currentPhaseTimer = 0;
+                if (combatManager != null) combatManager.StartCombat();
+            }
+        }
+        else if (currentPhase == GamePhase.Combat)
+        {
+             if (endTurnButtonText != null) endTurnButtonText.text = "Combat...";
         }
     }
 
@@ -100,42 +150,30 @@ public class GameManager : MonoBehaviour
     {
         isPaused = !isPaused;
         if (pauseMenuPanel != null) pauseMenuPanel.SetActive(isPaused);
-        
-        // Optional: Freeze time? Usually not needed for async auto-battlers unless animations are playing
-        // Time.timeScale = isPaused ? 0f : 1f; 
     }
 
-    // Option 1: Save and Quit (To Main Menu)
     public void SaveAndQuitToMenu()
     {
-        // In the future, call a SaveSystem.Save() here
-        Debug.Log("Saving and returning to Main Menu...");
-        Time.timeScale = 1f; // Ensure time is running
-        SceneManager.LoadScene(0); // Assumes MainMenu is at Build Index 0
+        Time.timeScale = 1f; 
+        SceneManager.LoadScene(0); 
     }
 
-    // Option 2: Concede (Triggers Death/Defeat)
     public void ConcedeGame()
     {
-        TogglePauseMenu(); // Close menu
-        
-        // Trigger Death Logic directly
+        TogglePauseMenu(); 
         playerHealth = 0;
         isUnconscious = true;
+        currentPhase = GamePhase.Death; 
         UpdateUI();
 
-        // This will trigger the Death Screen sequence immediately
         if (DeathSaveManager.instance != null)
         {
-            // Skip rolls, just die. Requires DeathSaveManager to have a public Succumb function.
             DeathSaveManager.instance.SuccumbToDeath(); 
         }
     }
 
-    // Option 3: Rage Quit (To Desktop)
     public void QuitToDesktop()
     {
-        Debug.Log("Rage Quitting...");
         Application.Quit();
         #if UNITY_EDITOR
         UnityEditor.EditorApplication.isPlaying = false;
@@ -199,16 +237,45 @@ public class GameManager : MonoBehaviour
             SpawnUnitOnBoard(activeHero.startingUnit);
         }
 
+        // Note: New Economy traits (Interest/Carryover) would be checked here in a full HeroData impl
         UpdateUI();
     }
 
     public void StartRecruitPhase()
     {
-        currentPhase = GamePhase.Recruit;
-        maxGold = Mathf.Min(3 + turnNumber, 10);
-        gold = maxGold;
-        heroPowerUsed = false; 
+        if (playerHealth <= 0 && !isUnconscious) 
+        {
+            currentPhase = GamePhase.Death;
+            Debug.Log("Cannot start Recruit Phase - Player is Dying/Dead");
+            return;
+        }
 
+        currentPhase = GamePhase.Recruit;
+        currentPhaseTimer = recruitTime;
+
+        // --- ECONOMY CALCULATION ---
+        int standardTurnCap = Mathf.Min(3 + turnNumber, 10);
+        maxGold = standardTurnCap; // Used for UI reference
+
+        if (enableGoldCarryover)
+        {
+            // Accumulation Mode (PvE / Specific Heroes)
+            int interest = 0;
+            if (enableInterest)
+            {
+                interest = Mathf.Min(gold / 10, interestCap);
+                if (interest > 0) LogAction($"Gained {interest} Gold from Interest.");
+            }
+            
+            gold += baseIncome + interest;
+        }
+        else
+        {
+            // Reset Mode (Standard PvP)
+            gold = maxGold;
+        }
+
+        // Hero Specific Bonuses
         if (activeHero != null && 
             activeHero.bonusType == HeroBonusType.ExtraGold && 
             turnNumber == 1)
@@ -225,6 +292,7 @@ public class GameManager : MonoBehaviour
     public bool TrySpendGold(int amount)
     {
         if (isUnconscious) return false;
+        if (currentPhase != GamePhase.Recruit) return false; 
 
         if (gold >= amount)
         {
@@ -235,6 +303,32 @@ public class GameManager : MonoBehaviour
         return false;
     }
 
+    // --- BANKING API (For Future Traits) ---
+    public bool DepositToBank(int amount)
+    {
+        if (gold >= amount)
+        {
+            gold -= amount;
+            bankBalance += amount;
+            LogAction($"Deposited {amount} gold. Bank Balance: {bankBalance}");
+            UpdateUI();
+            return true;
+        }
+        return false;
+    }
+
+    public void WithdrawFromBank(int amount)
+    {
+        if (bankBalance >= amount)
+        {
+            bankBalance -= amount;
+            gold += amount;
+            LogAction($"Withdrew {amount} gold. Bank Balance: {bankBalance}");
+            UpdateUI();
+        }
+    }
+
+    // --- BOARD SPAWNING LOGIC ---
     public void SpawnUnitOnBoard(UnitData data)
     {
         if (playerBoard == null || cardPrefab == null) return;
@@ -255,8 +349,6 @@ public class GameManager : MonoBehaviour
 
     public void SpawnToken(UnitData data, Transform parent)
     {
-        // Wrapper for compatibility with old AbilityManager calls
-        // Assumes "Force Spawn" logic
         TrySpawnUnit(data, AbilitySpawnLocation.BoardOnly, parent); 
     }
 
@@ -266,7 +358,6 @@ public class GameManager : MonoBehaviour
 
         Transform targetParent = null;
 
-        // Determine where to put it
         switch (location)
         {
             case AbilitySpawnLocation.BoardOnly:
@@ -277,7 +368,6 @@ public class GameManager : MonoBehaviour
                 }
                 else
                 {
-                    // Default to player board
                     if (playerBoard.childCount < 7) 
                         targetParent = playerBoard;
                 }
@@ -293,7 +383,6 @@ public class GameManager : MonoBehaviour
                 break;
                 
             case AbilitySpawnLocation.ReplaceTarget:
-                // Only used if we selected a specific target to destroy
                 if (specificTargetParent != null)
                 {
                     targetParent = specificTargetParent;
@@ -301,39 +390,37 @@ public class GameManager : MonoBehaviour
                 break;
         }
 
-        // If no valid parent found (e.g. board full), fail
         if (targetParent == null) 
         {
             Debug.Log("Spawn Failed: No Space!");
             return false;
         }
 
-        // Create the Unit
         GameObject newCard = Instantiate(cardPrefab, targetParent);
         CardDisplay display = newCard.GetComponent<CardDisplay>();
         
         if (display != null)
         {
             display.LoadUnit(data);
-            display.isPurchased = true; // Tokens are owned
+            display.isPurchased = true; 
             
-            // If spawned directly to board, trigger OnPlay
             if (targetParent == playerBoard)
             {
-                if (AbilityManager.instance != null)
+                if (currentPhase == GamePhase.Recruit)
                 {
-                    AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnPlay, display);
-                    AbilityManager.instance.RecalculateAuras();
+                    if (AbilityManager.instance != null)
+                    {
+                        AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnPlay, display);
+                    }
                 }
+                
+                if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
             }
-            // For enemy tokens, we might need visual updates but not full OnPlay logic yet
             else if (targetParent != playerHand)
             {
-                 // Ensure visual refresh for Enemy/Other boards
                  if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
             }
             
-            // Don't merge triples during combat
             if (currentPhase == GamePhase.Recruit)
                 CheckForTriples(data);
             
@@ -341,8 +428,6 @@ public class GameManager : MonoBehaviour
         }
         return false;
     }
-
-    // --- TARGETING SYSTEM ---
 
     public void StartAbilityTargeting(AbilityData ability)
     {
@@ -397,7 +482,6 @@ public class GameManager : MonoBehaviour
             return;
         }
 
-        // Logic: If target is "Select", start mode. Else cast immediately.
         if (activeHero.powerAbility.targetType == AbilityTarget.SelectTarget)
         {
             StartAbilityTargeting(activeHero.powerAbility);
@@ -449,6 +533,8 @@ public class GameManager : MonoBehaviour
         if (AbilityManager.instance != null)
         {
             AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnPlay, card);
+            // Trigger Ally Play Abilities
+            AbilityManager.instance.TriggerAllyPlayAbilities(card, playerBoard);
             AbilityManager.instance.RecalculateAuras(); 
         }
 
@@ -522,7 +608,6 @@ public class GameManager : MonoBehaviour
             for(int i=0; i<3; i++)
             {
                 CardDisplay c = matches[i];
-                // Clamp bonuses to 0 so we don't accidentally subtract stats if unit was debuffed
                 int atkBonus = Mathf.Max(0, c.permanentAttack - c.unitData.baseAttack);
                 int hpBonus = Mathf.Max(0, c.permanentHealth - c.unitData.baseHealth);
                 
@@ -569,8 +654,22 @@ public class GameManager : MonoBehaviour
 
     public void UpdateUI()
     {
-        if (goldText != null) goldText.text = $"Gold: {gold}/{maxGold}";
+        if (goldText != null)
+        {
+            // If in Carryover mode, show total gold. Otherwise show X/Max
+            if (enableGoldCarryover)
+            {
+                string bankText = bankBalance > 0 ? $" (+{bankBalance} Bank)" : "";
+                goldText.text = $"Gold: {gold}{bankText}";
+            }
+            else
+            {
+                goldText.text = $"Gold: {gold}/{maxGold}";
+            }
+        }
+
         if (turnText != null) turnText.text = $"Turn: {turnNumber}";
+
         if (healthText != null) 
         {
             healthText.text = $"HP: {playerHealth}/{maxPlayerHealth}";

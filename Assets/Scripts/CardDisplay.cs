@@ -3,7 +3,7 @@ using UnityEngine.UI;
 using TMPro;
 using UnityEngine.EventSystems; 
 using System.Collections.Generic;
-using System.Text; // Required for StringBuilder
+using System.Text; 
 
 public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandler, IDragHandler, IEndDragHandler
 {
@@ -17,11 +17,12 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     public Image tribeBanner;        
     public TMP_Text tribeText;       
     
-    public TMP_Text mechanicsText; // Auto-generated text
+    public TMP_Text mechanicsText; 
 
     public TMP_Text attackText;
     public TMP_Text healthText;
     public Image frameImage;
+    public Image goldenBorderImage; // NEW: Drag the golden border image here
 
     [Header("State")]
     public bool isPurchased = false; 
@@ -31,7 +32,10 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     public int permanentHealth;
     public int currentAttack;
     public int currentHealth;
+    
     public int damageTaken = 0;
+    
+    // Runtime keywords
     public bool hasDivineShield;
     public bool hasReborn;
 
@@ -74,10 +78,11 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
             permanentHealth = data.baseHealth;
         }
         
+        // Initialize Keywords from data
         hasDivineShield = data.hasDivineShield;
         hasReborn = data.hasReborn;
-        damageTaken = 0;
         
+        damageTaken = 0;
         ResetToPermanent();
         UpdateVisuals();
     }
@@ -91,23 +96,34 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     public void MakeGolden()
     {
         isGolden = true;
+        // Restore double stats logic
         permanentAttack = unitData.baseAttack * 2;
         permanentHealth = unitData.baseHealth * 2;
+        
         ResetToPermanent();
         UpdateVisuals();
     }
 
     public void TakeDamage(int amount)
     {
+        // DIVINE SHIELD LOGIC
         if (hasDivineShield && amount > 0)
         {
             hasDivineShield = false;
+            // Play shield break sound/vfx here
             UpdateVisuals();
-            return; 
+            return; // Prevent damage
         }
 
         damageTaken += amount;
         ResetToPermanent();
+        UpdateVisuals();
+    }
+    
+    // Method to break shield visually (called by CombatManager if tracking externally)
+    public void BreakShield()
+    {
+        hasDivineShield = false;
         UpdateVisuals();
     }
 
@@ -117,32 +133,20 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
 
         if (nameText != null) 
         {
-            nameText.text = isGolden ? "Golden " + unitData.unitName : unitData.unitName;
-            // NEW: Match Name Color to Frame (Neon Style)
+            // REMOVED: "Golden" prefix
+            nameText.text = unitData.unitName;
+            // Neon Name Color
             nameText.color = isGolden ? new Color(1f, 0.8f, 0.2f) : unitData.frameColor;
         }
 
         if (descriptionText != null) descriptionText.text = unitData.description;
-        
-        // Auto-Description
         if (mechanicsText != null) mechanicsText.text = GenerateMechanicsText();
-
         if (artworkImage != null) artworkImage.sprite = unitData.artwork;
-        
-        if (tribeText != null) 
-        {
-            tribeText.text = unitData.tribe.ToString(); 
-        }
+        if (tribeText != null) tribeText.text = unitData.tribe.ToString(); 
 
         bool hasTribe = unitData.tribe != Tribe.None;
-        if (tribeBanner != null)
-        {
-            tribeBanner.gameObject.SetActive(hasTribe);
-        }
-        else if (tribeText != null)
-        {
-            tribeText.gameObject.SetActive(hasTribe);
-        }
+        if (tribeBanner != null) tribeBanner.gameObject.SetActive(hasTribe);
+        else if (tribeText != null) tribeText.gameObject.SetActive(hasTribe);
 
         int baseAtk = isGolden ? unitData.baseAttack * 2 : unitData.baseAttack;
         int baseHp = isGolden ? unitData.baseHealth * 2 : unitData.baseHealth;
@@ -158,15 +162,35 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         if (healthText != null) 
         {
             healthText.text = currentHealth.ToString();
-            if (hasDivineShield) healthText.color = Color.yellow;
-            else if (currentHealth < permanentHealth) healthText.color = Color.red;
-            else if (currentHealth > baseHp) healthText.color = Color.green;
-            else healthText.color = originalHealthColor;
+            
+            // Visual for Divine Shield (Yellow Text)
+            if (hasDivineShield) 
+            {
+                healthText.color = Color.yellow;
+            }
+            else if (currentHealth < permanentHealth) 
+            {
+                healthText.color = Color.red;
+            }
+            else if (currentHealth > baseHp) 
+            {
+                healthText.color = Color.green;
+            }
+            else 
+            {
+                healthText.color = originalHealthColor;
+            }
         }
         
         if (frameImage != null) 
         {
             frameImage.color = isGolden ? new Color(1f, 0.8f, 0.2f) : unitData.frameColor;
+        }
+        
+        // NEW: Golden Border Overlay
+        if (goldenBorderImage != null)
+        {
+            goldenBorderImage.gameObject.SetActive(isGolden);
         }
     }
 
@@ -175,7 +199,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         StringBuilder sb = new StringBuilder();
 
         if (unitData.hasTaunt) sb.Append("<b>Taunt</b>. ");
-        if (hasDivineShield) sb.Append("<b>Divine Shield</b>. "); 
+        if (hasDivineShield) sb.Append("<b>Divine Shield</b>. "); // Use runtime value
         if (hasReborn) sb.Append("<b>Reborn</b>. "); 
 
         if (sb.Length > 0) sb.Append("\n");

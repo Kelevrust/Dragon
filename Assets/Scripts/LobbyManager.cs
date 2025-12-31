@@ -16,10 +16,12 @@ public class LobbyManager : MonoBehaviour
         public bool isDead;
         public int lastDamageTaken;
         
-        // Visuals
+        // MMR System
+        public int mmr;
+        public string rank;
+
         public Sprite heroPortrait;
         
-        // AI State
         public int gold;
         public int tavernTier;
         public List<UnitData> roster; 
@@ -28,9 +30,10 @@ public class LobbyManager : MonoBehaviour
     [Header("Configuration")]
     public int totalPlayers = 8;
     public int startingHealth = 30; 
+    public int playerStartingMMR = 3000; // You start in Bronze/Silver
 
     [Header("Visual Assets")]
-    public Sprite[] botPortraits; // Drag hero sprites here!
+    public Sprite[] botPortraits; 
 
     [Header("State")]
     public List<Opponent> opponents = new List<Opponent>();
@@ -68,24 +71,37 @@ public class LobbyManager : MonoBehaviour
             bot.health = startingHealth;
             bot.isDead = false;
             
-            // Assign random portrait if available
+            // Generate MMR based on Player +/- 1000
+            bot.mmr = Mathf.Max(0, playerStartingMMR + Random.Range(-500, 500));
+            bot.rank = GetRankFromMMR(bot.mmr);
+
             if (botPortraits != null && botPortraits.Length > 0)
             {
                 bot.heroPortrait = botPortraits[Random.Range(0, botPortraits.Length)];
             }
             
-            // AI Setup
             bot.gold = 3;
             bot.tavernTier = 1;
             bot.roster = new List<UnitData>();
             
-            if (AIManager.instance != null) AIManager.instance.SimulateOpponentTurn(bot, 0);
+            // Pass MMR to AI for initial setup
+            if (AIManager.instance != null) AIManager.instance.SimulateOpponentTurn(bot, 0, bot.mmr);
 
             opponents.Add(bot);
         }
         
         Debug.Log($"Lobby Initialized with {opponents.Count} opponents.");
         UpdateLeaderboardUI();
+    }
+
+    string GetRankFromMMR(int mmr)
+    {
+        if (mmr < 2000) return "Iron";
+        if (mmr < 4000) return "Bronze";
+        if (mmr < 6000) return "Silver";
+        if (mmr < 8000) return "Gold";
+        if (mmr < 10000) return "Platinum";
+        return "Diamond";
     }
 
     public Opponent GetNextOpponent()
@@ -98,6 +114,8 @@ public class LobbyManager : MonoBehaviour
             return null;
         }
         
+        // In the future: Matchmake based on closest MMR
+        // For MVP: Random alive
         currentOpponent = alive[Random.Range(0, alive.Count)];
         return currentOpponent;
     }
@@ -107,7 +125,9 @@ public class LobbyManager : MonoBehaviour
         foreach(var bot in opponents)
         {
             if (bot.isDead) continue;
-            if (AIManager.instance != null) AIManager.instance.SimulateOpponentTurn(bot, turnNumber);
+            
+            // Pass MMR to AI to adjust difficulty logic
+            if (AIManager.instance != null) AIManager.instance.SimulateOpponentTurn(bot, turnNumber, bot.mmr);
         }
 
         foreach(var bot in opponents)
@@ -115,6 +135,7 @@ public class LobbyManager : MonoBehaviour
             if (bot.isDead) continue;
             if (bot == currentOpponent) continue; 
             
+            // MMR-based win chance?
             int power = bot.roster.Sum(u => u.tier) + bot.roster.Count;
             int avgPower = turnNumber * 2; 
             
