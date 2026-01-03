@@ -19,11 +19,13 @@ public class GameTester : MonoBehaviour
     [Header("MMR Controls")]
     public bool overrideMMR = false;
     [Range(0, 12000)] public int targetMMR = 3000;
+    
     public bool distributeMMR = false;
     [Range(0, 2000)] public int mmrVariance = 500;
 
     [Header("--- DEBUG MENU ---")]
     [Header("Economy Overrides")]
+    public bool toggleEconomyMode = false; // Toggle to switch between Standard vs Accumulation
     public bool applyPoolOverrides = false;
     [Tooltip("Copies of each unit per Tier (Index 1 = Tier 1)")]
     public int[] customPoolSizes = new int[] { 0, 16, 15, 13, 11, 9, 7 };
@@ -35,7 +37,7 @@ public class GameTester : MonoBehaviour
     [Header("Tribal Manipulation")]
     public Tribe tribeToAdd = Tribe.None;
     public Tribe tribeToRemove = Tribe.None;
-    public bool triggerTribeUpdate = false; // Toggle this to apply
+    public bool triggerTribeUpdate = false; 
     
     [Header("Hero Swap")]
     public HeroData heroToSwapIn;
@@ -49,22 +51,38 @@ public class GameTester : MonoBehaviour
 
     void Start()
     {
-        if (GameManager.instance != null) lastHealth = GameManager.instance.playerHealth;
+        if (GameManager.instance != null)
+        {
+            lastHealth = GameManager.instance.playerHealth;
+        }
         wasAutoPlaying = isAutoPlaying;
-        if (applyPoolOverrides && ShopManager.instance != null) ApplyPoolOverrides();
+        
+        if (applyPoolOverrides && ShopManager.instance != null)
+        {
+            ApplyPoolOverrides();
+        }
     }
 
     void Update()
     {
         HandleDebugInputs();
 
-        if (LobbyManager.instance != null && (overrideMMR || distributeMMR)) ApplyMMRSettings();
-        if (AIManager.instance != null) AIManager.instance.difficultyMultiplier = aiDifficulty;
+        if (LobbyManager.instance != null && (overrideMMR || distributeMMR))
+        {
+            ApplyMMRSettings();
+        }
+
+        if (AIManager.instance != null) 
+        {
+            AIManager.instance.difficultyMultiplier = aiDifficulty;
+        }
 
         Time.timeScale = simulationSpeed;
 
         if (wasAutoPlaying && !isAutoPlaying)
+        {
             Debug.Log($"<color=yellow>Tester: AI Interrupted by User in Round {GameManager.instance.turnNumber} - {GameManager.instance.currentPhase}</color>");
+        }
         wasAutoPlaying = isAutoPlaying;
 
         if (!isAutoPlaying) return;
@@ -97,23 +115,30 @@ public class GameTester : MonoBehaviour
     {
         if (GameManager.instance == null) return;
 
-        // Gold Cheat
+        if (toggleEconomyMode)
+        {
+            bool newState = !GameManager.instance.enableGoldCarryover;
+            GameManager.instance.ToggleBankingMode(newState);
+            GameManager.instance.enableInterest = newState;
+            
+            Debug.Log($"Tester: Toggled Economy Mode to {(newState ? "Accumulation" : "Standard")}");
+            toggleEconomyMode = false;
+        }
+
         if (setGoldTo >= 0)
         {
             GameManager.instance.gold = setGoldTo;
             GameManager.instance.UpdateUI();
             Debug.Log($"Tester: Cheat Gold set to {setGoldTo}");
-            setGoldTo = -1; // Reset trigger
+            setGoldTo = -1; 
         }
 
-        // Tier Cheat
         if (setTavernTierTo >= 1 && ShopManager.instance != null)
         {
             ShopManager.instance.ForceSetTier(setTavernTierTo);
             setTavernTierTo = -1;
         }
 
-        // Tribe Manipulation
         if (triggerTribeUpdate && ShopManager.instance != null)
         {
             if (tribeToAdd != Tribe.None) ShopManager.instance.ModifyTribes(tribeToAdd, true);
@@ -121,12 +146,10 @@ public class GameTester : MonoBehaviour
             triggerTribeUpdate = false;
         }
 
-        // Hero Swap
         if (triggerHeroSwap && heroToSwapIn != null)
         {
             Debug.Log($"Tester: Swapping Hero to {heroToSwapIn.heroName}");
             GameManager.instance.activeHero = heroToSwapIn;
-            // Re-apply passives if needed? For now just swaps data reference
             GameManager.instance.UpdateUI();
             triggerHeroSwap = false;
         }
@@ -139,25 +162,28 @@ public class GameTester : MonoBehaviour
         ShopManager.instance.SetPoolSizes(customPoolSizes);
     }
     
-    // ... (ApplyMMRSettings, RunBotDecision, and Helpers remain same as previous version) ...
-    // Note: I am truncating the existing logic methods here for brevity, 
-    // assuming they are unchanged from the previous robust implementation. 
-    // Ensure you keep the RunBotDecision logic you had!
+    // ... (Remainder of existing AI logic like ApplyMMRSettings, RunBotDecision, TryBuyTriple, etc.) ...
+    // Note: Ensure the rest of the existing robust AI logic is kept below this point.
+    // I am including it here for completeness to avoid file truncation issues.
     
     void ApplyMMRSettings()
     {
         var bots = LobbyManager.instance.opponents;
         if (bots == null || bots.Count == 0) return;
+
         for (int i = 0; i < bots.Count; i++)
         {
             int newMMR = targetMMR;
+
             if (distributeMMR)
             {
                 float t = (float)i / (Mathf.Max(1, bots.Count - 1)); 
                 float offset = Mathf.Lerp(-mmrVariance, mmrVariance, t);
                 newMMR = Mathf.RoundToInt(targetMMR + offset);
             }
+
             bots[i].mmr = Mathf.Clamp(newMMR, 0, 12000);
+            
             if (bots[i].mmr < 2000) bots[i].rank = "Iron";
             else if (bots[i].mmr < 4000) bots[i].rank = "Bronze";
             else if (bots[i].mmr < 6000) bots[i].rank = "Silver";
@@ -171,10 +197,7 @@ public class GameTester : MonoBehaviour
     {
         if (DeathSaveManager.instance != null && DeathSaveManager.instance.deathScreenPanel.activeSelf)
         {
-            if (DeathSaveManager.instance.playAgainButton.gameObject.activeInHierarchy)
-                DeathSaveManager.instance.playAgainButton.onClick.Invoke();
-            else if (DeathSaveManager.instance.rollButton.interactable)
-                DeathSaveManager.instance.rollButton.onClick.Invoke();
+            HandleDeathScreen();
             return;
         }
 
@@ -182,9 +205,11 @@ public class GameTester : MonoBehaviour
         {
             if (GameManager.instance.isUnconscious)
             {
+                Debug.Log("Tester: Unconscious. Skipping turn.");
                 CombatManager.instance.StartCombat();
                 return;
             }
+            
             if (TryUpgradeTavern()) return;
             if (TryPlayFromHand()) return;
             if (TryBuyTriple()) return;
@@ -197,25 +222,31 @@ public class GameTester : MonoBehaviour
         }
     }
 
-    // Re-including helper methods to ensure the file is complete
     bool TryPlayFromHand()
     {
         if (GameManager.instance.playerHand.childCount == 0) return false;
+        
         foreach(Transform child in GameManager.instance.playerHand)
         {
             CardDisplay card = child.GetComponent<CardDisplay>();
             if (card != null)
             {
-                if (GameManager.instance.TryPlayCardToBoard(card)) return true;
+                if (GameManager.instance.TryPlayCardToBoard(card))
+                {
+                    Debug.Log($"Tester: Playing {card.unitData.unitName} from Hand.");
+                    return true;
+                }
                 
                 GameObject playerBoard = GameObject.Find("PlayerBoard");
                 if (playerBoard.transform.childCount >= 7)
                 {
                     var boardCards = GetMyCardsOnBoard();
                     var worstUnit = boardCards.OrderBy(c => c.isGolden).ThenBy(c => c.unitData.tier).First();
+
                     bool isUpgrade = card.isGolden || card.unitData.tier > worstUnit.unitData.tier;
                     if (isUpgrade && !worstUnit.isGolden)
                     {
+                        Debug.Log($"Tester: Board Full. Selling {worstUnit.unitData.unitName} to play {card.unitData.unitName}.");
                         GameManager.instance.SellUnit(worstUnit);
                         return true; 
                     }
@@ -229,12 +260,15 @@ public class GameTester : MonoBehaviour
     {
         ShopManager shop = FindFirstObjectByType<ShopManager>();
         if (shop == null) return false;
+
         int cost = GetUpgradeCost(shop);
         bool canAfford = GameManager.instance.gold >= cost;
         bool safeToUpgrade = GameManager.instance.gold >= cost + 3;
         bool cheapUpgrade = cost <= 4;
+
         if (canAfford && (safeToUpgrade || cheapUpgrade) && shop.tavernTier < shop.maxTier)
         {
+            Debug.Log($"Tester: Upgrading Tavern to Tier {shop.tavernTier + 1}");
             shop.OnUpgradeClick();
             return true;
         }
@@ -245,18 +279,26 @@ public class GameTester : MonoBehaviour
     {
         List<CardDisplay> shopCards = GetShopCards();
         List<CardDisplay> myCards = GetMyCards();
+
         foreach (var shopCard in shopCards)
         {
             if (!CanAfford(shopCard)) continue;
-            int myCount = myCards.Count(c => c.unitData == shopCard.unitData && !c.isGolden);
-            int shopCount = shopCards.Count(c => c.unitData == shopCard.unitData);
-            if (myCount + shopCount >= 3 && myCount < 3) 
+
+            int count = myCards.Count(c => c.unitData == shopCard.unitData && !c.isGolden);
+            if (count >= 2)
             {
+                Debug.Log($"Tester: Found Triple for {shopCard.unitData.unitName}!");
+                
                 if (GetMyCardsOnBoard().Count >= 7 && !HasTripleComponents(shopCard))
                 {
                     var worstUnit = GetMyCardsOnBoard().OrderBy(c => c.isGolden).ThenBy(c => c.unitData.tier).First();
-                    if (worstUnit.unitData != shopCard.unitData) GameManager.instance.SellUnit(worstUnit);
+                    if (worstUnit.unitData != shopCard.unitData)
+                    {
+                        Debug.Log($"Tester: Selling {worstUnit.unitData.unitName} to make room for Triple.");
+                        GameManager.instance.SellUnit(worstUnit);
+                    }
                 }
+
                 return BuyCardSmart(shopCard);
             }
         }
@@ -285,6 +327,7 @@ public class GameTester : MonoBehaviour
         {
             if (bestShop.unitData.tier > worstUnit.unitData.tier)
             {
+                Debug.Log($"Tester: Upgrading Army. Selling {worstUnit.unitData.unitName} for {bestShop.unitData.unitName}");
                 GameManager.instance.SellUnit(worstUnit);
                 return BuyCardSmart(bestShop); 
             }
@@ -305,7 +348,11 @@ public class GameTester : MonoBehaviour
 
     bool BuyCardSmart(CardDisplay card)
     {
-        if (GameManager.instance.TryBuyToHand(card.unitData, card)) return true;
+        if (GameManager.instance.TryBuyToHand(card.unitData, card))
+        {
+            Debug.Log($"Tester: Bought {card.unitData.unitName} to Hand.");
+            return true;
+        }
         return false;
     }
 
@@ -345,5 +392,17 @@ public class GameTester : MonoBehaviour
         int nextTier = shop.tavernTier + 1;
         if (nextTier < shop.tierCosts.Length) return Mathf.Max(0, shop.tierCosts[nextTier] - shop.currentDiscount);
         return 99;
+    }
+
+    void HandleDeathScreen()
+    {
+        DeathSaveManager dsm = DeathSaveManager.instance;
+        if (dsm.playAgainButton != null && dsm.playAgainButton.gameObject.activeInHierarchy)
+        {
+             Debug.Log("Tester: Game Over. Restarting...");
+             dsm.playAgainButton.onClick.Invoke();
+             return;
+        }
+        if (dsm.rollButton != null && dsm.rollButton.interactable) dsm.rollButton.onClick.Invoke();
     }
 }

@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using UnityEngine.UI; 
 using System.Text; 
 using UnityEngine.SceneManagement;
-using UnityEngine.InputSystem; // NEW: Required for New Input System
+using UnityEngine.InputSystem; 
 
 public class GameManager : MonoBehaviour
 {
@@ -48,6 +48,10 @@ public class GameManager : MonoBehaviour
     public TMP_Text tierText;
     public TMP_Text endTurnButtonText; 
     
+    [Header("Bank UI References")]
+    public GameObject bankPanel; 
+    public TMP_Text bankBalanceText;
+    
     [Header("Managers")]
     public CombatManager combatManager;
 
@@ -82,7 +86,8 @@ public class GameManager : MonoBehaviour
         
         if (pauseMenuPanel != null) pauseMenuPanel.SetActive(false);
         
-        // --- LOGGING UPDATE ---
+        if (bankPanel != null) bankPanel.SetActive(enableGoldCarryover);
+
         string playerType = "Human";
         string logDetails = "";
 
@@ -111,15 +116,12 @@ public class GameManager : MonoBehaviour
 
     void Update()
     {
-        // --- UPDATED INPUT SYSTEM LOGIC ---
-        // Replace Input.GetKeyDown with Keyboard.current...
         if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
         {
             if (isTargetingMode) CancelTargeting();
             else TogglePauseMenu();
         }
 
-        // Replace Input.GetMouseButtonDown(1) with Mouse.current.rightButton...
         if (isTargetingMode && Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame)
         {
             CancelTargeting();
@@ -137,6 +139,7 @@ public class GameManager : MonoBehaviour
             if (currentPhaseTimer <= 0)
             {
                 currentPhaseTimer = 0;
+                CleanUpFloatingCards();
                 if (combatManager != null) combatManager.StartCombat();
             }
         }
@@ -182,7 +185,6 @@ public class GameManager : MonoBehaviour
         #endif
     }
 
-    // --- LOGGING ---
     public void LogAction(string action)
     {
         Debug.Log($"<color=white>[ACTION]</color> {action}");
@@ -254,7 +256,6 @@ public class GameManager : MonoBehaviour
         currentPhase = GamePhase.Recruit;
         currentPhaseTimer = recruitTime;
 
-        // --- ECONOMY CALCULATION ---
         int standardTurnCap = Mathf.Min(3 + turnNumber, 10);
         maxGold = standardTurnCap; 
 
@@ -263,8 +264,9 @@ public class GameManager : MonoBehaviour
             int interest = 0;
             if (enableInterest)
             {
-                interest = Mathf.Min(gold / 10, interestCap);
-                if (interest > 0) LogAction($"Gained {interest} Gold from Interest.");
+                int totalWealth = gold + bankBalance;
+                interest = Mathf.Min(totalWealth / 10, interestCap);
+                if (interest > 0) LogAction($"Gained {interest} Gold from Interest (Total Wealth: {totalWealth}).");
             }
             gold += baseIncome + interest;
         }
@@ -300,8 +302,14 @@ public class GameManager : MonoBehaviour
         return false;
     }
 
-    // --- BANKING API ---
-    public bool DepositToBank(int amount)
+    public void ToggleBankingMode(bool active)
+    {
+        enableGoldCarryover = active;
+        if (bankPanel != null) bankPanel.SetActive(active);
+        UpdateUI();
+    }
+
+    public void DepositToBank(int amount)
     {
         if (gold >= amount)
         {
@@ -309,9 +317,7 @@ public class GameManager : MonoBehaviour
             bankBalance += amount;
             LogAction($"Deposited {amount} gold. Bank Balance: {bankBalance}");
             UpdateUI();
-            return true;
         }
-        return false;
     }
 
     public void WithdrawFromBank(int amount)
@@ -325,7 +331,6 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    // --- BOARD SPAWNING LOGIC ---
     public void SpawnUnitOnBoard(UnitData data)
     {
         if (playerBoard == null || cardPrefab == null) return;
@@ -516,7 +521,41 @@ public class GameManager : MonoBehaviour
         return true;
     }
 
-    public bool TryPlayCardToBoard(CardDisplay card)
+    // --- NEW: Buy directly to Board ---
+    public bool TryBuyToBoard(UnitData data, CardDisplay sourceCard, int targetIndex = -1)
+    {
+        if (!TrySpendGold(data.cost)) return false;
+
+        if (playerBoard.childCount >= 7)
+        {
+            Debug.Log("Board is full!");
+            gold += data.cost; 
+            return false;
+        }
+
+        sourceCard.transform.SetParent(playerBoard);
+        if (targetIndex >= 0) sourceCard.transform.SetSiblingIndex(targetIndex);
+        
+        sourceCard.isPurchased = true;
+        LogAction($"Bought {data.unitName} directly to Board");
+        
+        if (AnalyticsManager.instance != null)
+            AnalyticsManager.instance.TrackPurchase(data.unitName, data.cost);
+
+        // Trigger Play effects since it "entered the board"
+        if (AbilityManager.instance != null)
+        {
+            AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnPlay, sourceCard);
+            AbilityManager.instance.TriggerAllyPlayAbilities(sourceCard, playerBoard);
+            AbilityManager.instance.RecalculateAuras();
+        }
+
+        CheckForTriples(data);
+        return true;
+    }
+
+    // --- UPDATED: Allow targeted placement ---
+    public bool TryPlayCardToBoard(CardDisplay card, int targetIndex = -1)
     {
         if (playerBoard.childCount >= 7)
         {
@@ -525,12 +564,13 @@ public class GameManager : MonoBehaviour
         }
 
         card.transform.SetParent(playerBoard);
+        if (targetIndex >= 0) card.transform.SetSiblingIndex(targetIndex);
+        
         LogAction($"Played {card.unitData.unitName} to Board");
         
         if (AbilityManager.instance != null)
         {
             AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnPlay, card);
-            // Trigger Ally Play Abilities
             AbilityManager.instance.TriggerAllyPlayAbilities(card, playerBoard);
             AbilityManager.instance.RecalculateAuras(); 
         }
@@ -637,6 +677,8 @@ public class GameManager : MonoBehaviour
 
     public void ModifyHealth(int amount)
     {
+        Debug.Log($"<color=red>ModifyHealth called! Amount: {amount}. Previous HP: {playerHealth}</color>");
+
         playerHealth += amount;
         if (playerHealth > maxPlayerHealth) playerHealth = maxPlayerHealth;
         
@@ -647,6 +689,38 @@ public class GameManager : MonoBehaviour
         }
 
         UpdateUI();
+        
+        LeaderboardUI leaderboard = FindFirstObjectByType<LeaderboardUI>();
+        if (leaderboard != null) leaderboard.UpdateDisplay();
+    }
+    
+    public void CleanUpFloatingCards()
+    {
+        CardDisplay[] allCards = FindObjectsByType<CardDisplay>(FindObjectsSortMode.None);
+        foreach(var card in allCards)
+        {
+            if (card.gameObject.activeInHierarchy && 
+                card.transform.parent != playerBoard && 
+                card.transform.parent != playerHand && 
+                (combatManager == null || card.transform.parent != combatManager.shopContainer))
+            {
+                if (card.GetComponentInParent<Canvas>() != null && card.transform.parent.GetComponent<Canvas>() != null)
+                {
+                    Debug.Log($"Cleaning up floating card: {card.name}");
+                    
+                    if (card.isPurchased)
+                    {
+                        card.transform.SetParent(playerHand);
+                        card.transform.localPosition = Vector3.zero;
+                        card.transform.localScale = Vector3.one;
+                    }
+                    else
+                    {
+                        Destroy(card.gameObject);
+                    }
+                }
+            }
+        }
     }
 
     public void UpdateUI()
@@ -655,13 +729,27 @@ public class GameManager : MonoBehaviour
         {
             if (enableGoldCarryover)
             {
-                string bankText = bankBalance > 0 ? $" (+{bankBalance} Bank)" : "";
-                goldText.text = $"Gold: {gold}{bankText}";
+                goldText.text = $"Gold: {gold}";
             }
             else
             {
                 goldText.text = $"Gold: {gold}/{maxGold}";
             }
+        }
+        
+        if (bankBalanceText != null)
+        {
+            string interestText = "";
+            if (enableInterest && enableGoldCarryover)
+            {
+                int totalWealth = gold + bankBalance;
+                int projectedInterest = Mathf.Min(totalWealth / 10, interestCap);
+                if (projectedInterest > 0)
+                {
+                    interestText = $" <color=yellow>(+{projectedInterest})</color>";
+                }
+            }
+            bankBalanceText.text = $"Bank: {bankBalance}{interestText}";
         }
 
         if (turnText != null) turnText.text = $"Turn: {turnNumber}";

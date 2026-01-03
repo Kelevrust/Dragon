@@ -1,17 +1,15 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
-using System.Collections;
-using UnityEngine.EventSystems; // Required for Tooltip events
+using UnityEngine.EventSystems;
+using DG.Tweening; // NEW: The Magic Ingredient
 
 public class LeaderboardRow : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
 {
     [Header("UI References")]
     public Image portraitImage;
     public TMP_Text nameText;
-    
     public Image healthBarFill; 
-    
     public Image healthFillImage; 
     public Image backgroundImage; 
     public GameObject deadIcon;   
@@ -19,18 +17,22 @@ public class LeaderboardRow : MonoBehaviour, IPointerEnterHandler, IPointerExitH
     [Header("Settings")]
     public Color playerColor = Color.green;
     public Color enemyColor = Color.white;
-    public Color opponentColor = new Color(1f, 0.5f, 0f); 
     public Color deadColor = Color.gray;
     
     [Header("Animation")]
-    public float fillSpeed = 5.0f; 
+    public float fillSpeed = 0.5f; 
 
-    private Coroutine fillCoroutine;
-    private string tooltipContent; // Stores the Tribe data
+    private string tooltipContent; 
+    private RectTransform rectTransform;
+
+    void Awake()
+    {
+        rectTransform = GetComponent<RectTransform>();
+    }
 
     public void Setup(string name, int health, int maxHealth, bool isDead, bool isPlayer, bool isOpponent, Sprite portrait, string tooltipData)
     {
-        tooltipContent = tooltipData; // Store for mouseover
+        tooltipContent = tooltipData; 
 
         // 1. Text
         if (nameText != null)
@@ -39,28 +41,39 @@ public class LeaderboardRow : MonoBehaviour, IPointerEnterHandler, IPointerExitH
             nameText.color = isDead ? deadColor : (isPlayer ? playerColor : Color.white);
         }
 
-        // 2. Health Bar (Animated)
+        // 2. Health Bar (DOTween Version)
         if (healthBarFill != null)
         {
             float targetAmount = (float)health / maxHealth;
             
+            // Kill any running tweens on this object to prevent conflicts
+            healthBarFill.DOKill();
+            
             if (healthBarFill.fillAmount == 0 && health > 0) 
             {
+                 // Instant set on init
                  healthBarFill.fillAmount = targetAmount;
             }
             else
             {
-                if (fillCoroutine != null) StopCoroutine(fillCoroutine);
-                fillCoroutine = StartCoroutine(AnimateFill(targetAmount));
+                // Smooth slide
+                healthBarFill.DOFillAmount(targetAmount, fillSpeed).SetEase(Ease.OutQuart);
+                
+                // Juice: Shake the row if taking damage
+                if (targetAmount < healthBarFill.fillAmount)
+                {
+                    // Shake position: Duration, Strength, Vibrato
+                    rectTransform.DOShakeAnchorPos(0.3f, new Vector2(5f, 0f), 10, 90, false, true);
+                }
             }
         }
 
-        // 3. Health Color
+        // 3. Health Color (Green -> Red gradient)
         Image targetColorImg = healthFillImage != null ? healthFillImage : healthBarFill;
         if (targetColorImg != null && !isDead)
         {
             float hpPercent = (float)health / maxHealth;
-            targetColorImg.color = Color.Lerp(Color.red, Color.green, hpPercent);
+            targetColorImg.DOColor(Color.Lerp(Color.red, Color.green, hpPercent), fillSpeed);
         }
 
         // 4. Portrait
@@ -76,23 +89,12 @@ public class LeaderboardRow : MonoBehaviour, IPointerEnterHandler, IPointerExitH
         // 6. Highlight Current Opponent
         if (backgroundImage != null)
         {
-            if (isOpponent) backgroundImage.color = new Color(1f, 0.5f, 0f, 0.3f); 
-            else if (isPlayer) backgroundImage.color = new Color(0f, 1f, 0f, 0.1f); 
-            else backgroundImage.color = new Color(0f, 0f, 0f, 0.5f); 
+            Color targetColor = new Color(0f, 0f, 0f, 0.5f); // Default
+            if (isOpponent) targetColor = new Color(1f, 0.5f, 0f, 0.3f); 
+            else if (isPlayer) targetColor = new Color(0f, 1f, 0f, 0.1f); 
+            
+            backgroundImage.color = targetColor;
         }
-    }
-
-    IEnumerator AnimateFill(float targetAmount)
-    {
-        float current = healthBarFill.fillAmount;
-        float t = 0f;
-        while (Mathf.Abs(current - targetAmount) > 0.01f)
-        {
-            t += Time.deltaTime * fillSpeed;
-            healthBarFill.fillAmount = Mathf.Lerp(current, targetAmount, t);
-            yield return null;
-        }
-        healthBarFill.fillAmount = targetAmount;
     }
 
     // --- TOOLTIP EVENTS ---
@@ -100,12 +102,10 @@ public class LeaderboardRow : MonoBehaviour, IPointerEnterHandler, IPointerExitH
     {
         if (TooltipManager.instance != null && !string.IsNullOrEmpty(tooltipContent))
         {
-            // Use existing Unit Tooltip logic but repurpose it? 
-            // Or create a simple text tooltip method in TooltipManager.
-            // For now, let's assume TooltipManager has a ShowSimpleText method.
-            // If not, we should probably add one or just use the console for now.
-            // *Assuming you have a simple tooltip method, if not I'll add one below*
             TooltipManager.instance.ShowSimpleTooltip(tooltipContent, transform.position);
+            
+            // Juice: Slight scale up on hover
+            transform.DOScale(1.05f, 0.1f);
         }
     }
 
@@ -115,5 +115,16 @@ public class LeaderboardRow : MonoBehaviour, IPointerEnterHandler, IPointerExitH
         {
             TooltipManager.instance.HideTooltip();
         }
+        
+        // Restore scale
+        transform.DOScale(1f, 0.1f);
+    }
+    
+    void OnDestroy()
+    {
+        // Safety: Kill tweens if object is destroyed
+        transform.DOKill();
+        if(healthBarFill != null) healthBarFill.DOKill();
+        if(healthFillImage != null) healthFillImage.DOKill();
     }
 }

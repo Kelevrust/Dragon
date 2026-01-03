@@ -8,7 +8,6 @@ Palette: Deep blacks, hard outlines, neon accents (Cyan/Magenta).
 Setting: Modern urban decay overlaid with ancient folklore.
 
 Project Overview
-
 Engine: Unity 2022+ (LTS)
 Language: C#
 Platform: PC / Android (Initial Target)
@@ -32,7 +31,8 @@ Phase 1.5: Advanced Economy & Flow (Complete)
 [x] Pay Gold to upgrade Tavern Tier.
 [x] Higher tiers unlock better units in the shop.
 [x] Discount logic (Upgrade cost reduces by 1 per turn).
-[ ] Freeze Shop: Lock current shop cards for next turn.
+[x] Freeze Shop: Lock current shop cards for next turn.
+[x] Card Shoe (Pool): Finite unit copies to prevent force-building.
 [ ] Interest System: Gain +1 Gold for every 10 Gold saved (Cap at +5).
 [ ] Bank System: Ability to store gold between turns.
 
@@ -101,3 +101,11 @@ Goal: Long-term retention and Steam Launch requirements.
 [ ] Steam Login/Auth.
 [ ] Steam Achievements: Sync internal achievements to Steam overlay.
 [ ] Steam Cloud Save (Backup for PlayFab).
+
+Future Asset Wishlist (Polish & Juice)
+
+Consider picking these up during sales for high-end polish phases.
+
+[ ] Feel (MMFeedbacks): High-end feedback system for screenshake, chromatic aberration, and haptics.
+[ ] Text Animator for Unity: Dynamic text movement for damage numbers and AI coaching.
+[ ] Master Audio: Advanced audio pooling, ducking, and variation.

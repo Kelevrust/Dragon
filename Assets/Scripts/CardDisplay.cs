@@ -4,8 +4,9 @@ using TMPro;
 using UnityEngine.EventSystems; 
 using System.Collections.Generic;
 using System.Text; 
+using DG.Tweening; 
 
-public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandler, IDragHandler, IEndDragHandler
+public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerEnterHandler, IPointerExitHandler
 {
     public UnitData unitData;
     
@@ -22,7 +23,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     public TMP_Text attackText;
     public TMP_Text healthText;
     public Image frameImage;
-    public Image goldenBorderImage; // NEW: Drag the golden border image here
+    public Image goldenBorderImage; 
 
     [Header("State")]
     public bool isPurchased = false; 
@@ -35,7 +36,6 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     
     public int damageTaken = 0;
     
-    // Runtime keywords
     public bool hasDivineShield;
     public bool hasReborn;
 
@@ -58,6 +58,11 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         Canvas canvas = GetComponentInParent<Canvas>();
         if (canvas != null) canvasTransform = canvas.transform;
     }
+    
+    void OnDestroy()
+    {
+        transform.DOKill();
+    }
 
     void InitializeColors()
     {
@@ -78,7 +83,6 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
             permanentHealth = data.baseHealth;
         }
         
-        // Initialize Keywords from data
         hasDivineShield = data.hasDivineShield;
         hasReborn = data.hasReborn;
         
@@ -96,9 +100,10 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     public void MakeGolden()
     {
         isGolden = true;
-        // Restore double stats logic
         permanentAttack = unitData.baseAttack * 2;
         permanentHealth = unitData.baseHealth * 2;
+        
+        transform.DOPunchScale(Vector3.one * 0.2f, 0.5f, 10, 1);
         
         ResetToPermanent();
         UpdateVisuals();
@@ -106,21 +111,20 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
 
     public void TakeDamage(int amount)
     {
-        // DIVINE SHIELD LOGIC
         if (hasDivineShield && amount > 0)
         {
             hasDivineShield = false;
-            // Play shield break sound/vfx here
+            transform.DOShakePosition(0.3f, 5f, 20, 90, false, true);
             UpdateVisuals();
-            return; // Prevent damage
+            return; 
         }
 
         damageTaken += amount;
+        transform.DOShakePosition(0.2f, 3f, 20, 90, false, true);
         ResetToPermanent();
         UpdateVisuals();
     }
     
-    // Method to break shield visually (called by CombatManager if tracking externally)
     public void BreakShield()
     {
         hasDivineShield = false;
@@ -133,9 +137,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
 
         if (nameText != null) 
         {
-            // REMOVED: "Golden" prefix
             nameText.text = unitData.unitName;
-            // Neon Name Color
             nameText.color = isGolden ? new Color(1f, 0.8f, 0.2f) : unitData.frameColor;
         }
 
@@ -163,23 +165,10 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         {
             healthText.text = currentHealth.ToString();
             
-            // Visual for Divine Shield (Yellow Text)
-            if (hasDivineShield) 
-            {
-                healthText.color = Color.yellow;
-            }
-            else if (currentHealth < permanentHealth) 
-            {
-                healthText.color = Color.red;
-            }
-            else if (currentHealth > baseHp) 
-            {
-                healthText.color = Color.green;
-            }
-            else 
-            {
-                healthText.color = originalHealthColor;
-            }
+            if (hasDivineShield) healthText.color = Color.yellow;
+            else if (currentHealth < permanentHealth) healthText.color = Color.red;
+            else if (currentHealth > baseHp) healthText.color = Color.green;
+            else healthText.color = originalHealthColor;
         }
         
         if (frameImage != null) 
@@ -187,7 +176,6 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
             frameImage.color = isGolden ? new Color(1f, 0.8f, 0.2f) : unitData.frameColor;
         }
         
-        // NEW: Golden Border Overlay
         if (goldenBorderImage != null)
         {
             goldenBorderImage.gameObject.SetActive(isGolden);
@@ -199,7 +187,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         StringBuilder sb = new StringBuilder();
 
         if (unitData.hasTaunt) sb.Append("<b>Taunt</b>. ");
-        if (hasDivineShield) sb.Append("<b>Divine Shield</b>. "); // Use runtime value
+        if (hasDivineShield) sb.Append("<b>Divine Shield</b>. "); 
         if (hasReborn) sb.Append("<b>Reborn</b>. "); 
 
         if (sb.Length > 0) sb.Append("\n");
@@ -218,6 +206,10 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
                     case AbilityTrigger.OnAllyDeath: sb.Append("<b>Scavenge:</b> "); break;
                     case AbilityTrigger.OnTurnStart: sb.Append("<b>Start of Turn:</b> "); break;
                     case AbilityTrigger.OnDamageTaken: sb.Append("<b>Enrage:</b> "); break;
+                    case AbilityTrigger.OnAllyPlay: 
+                        string tribe = ability.targetTribe != Tribe.None ? ability.targetTribe.ToString() : "Ally";
+                        sb.Append($"<b>Synergy ({tribe}):</b> "); 
+                        break;
                 }
 
                 switch (ability.effectType)
@@ -270,12 +262,35 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         }
     }
 
-    // --- DRAG IMPLEMENTATION ---
+    public void OnPointerEnter(PointerEventData eventData)
+    {
+        if (TooltipManager.instance != null)
+        {
+            TooltipManager.instance.Show(this);
+        }
+
+        if (!eventData.dragging)
+        {
+            transform.DOScale(1.1f, 0.2f).SetEase(Ease.OutBack);
+        }
+    }
+
+    public void OnPointerExit(PointerEventData eventData)
+    {
+        if (TooltipManager.instance != null)
+        {
+            TooltipManager.instance.Hide();
+        }
+
+        transform.DOScale(1f, 0.2f);
+    }
 
     public void OnBeginDrag(PointerEventData eventData)
     {
         if (GameManager.instance.currentPhase != GameManager.GamePhase.Recruit || GameManager.instance.isUnconscious) 
             return;
+
+        transform.DOScale(0.9f, 0.1f);
 
         originalParent = transform.parent;
         originalIndex = transform.GetSiblingIndex();
@@ -311,6 +326,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     public void OnEndDrag(PointerEventData eventData)
     {
         canvasGroup.blocksRaycasts = true;
+        transform.DOScale(1f, 0.2f);
 
         if (GameManager.instance.currentPhase != GameManager.GamePhase.Recruit || GameManager.instance.isUnconscious) 
         {
@@ -327,7 +343,8 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         {
             GameObject hitObject = result.gameObject;
 
-            if (hitObject.name.Contains("SellButton")) 
+            // Updated check to include both the Button and the new large transparent Zone
+            if (hitObject.name.Contains("SellButton") || hitObject.name.Contains("SellZone")) 
             {
                 if (isPurchased)
                 {
@@ -353,28 +370,44 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
                 if (actionHandled) break;
             }
 
+            // --- IMPROVED BOARD DROP LOGIC ---
             bool hitBoard = hitObject.name == "PlayerBoard" || (hitObject.transform.parent != null && hitObject.transform.parent.name == "PlayerBoard");
-            if (hitBoard && isPurchased)
+            if (hitBoard)
             {
-                Transform boardTransform = GameManager.instance.playerBoard;
-
-                if (originalParent == GameManager.instance.playerHand)
+                // Calculate position index
+                int newIndex = 0;
+                foreach(Transform child in GameManager.instance.playerBoard)
                 {
-                    if (GameManager.instance.TryPlayCardToBoard(this)) actionHandled = true;
+                    // If we are already on the board, skip self to find relative index
+                    if (child == transform) continue; 
+                    if (transform.position.x > child.position.x) newIndex++;
                 }
-                else if (originalParent == boardTransform)
+
+                if (!isPurchased)
                 {
-                    transform.SetParent(boardTransform);
-                    int newIndex = 0;
-                    foreach(Transform child in boardTransform)
+                    // Drag from Shop -> Board (Buy to Hand as requested)
+                    if (GameManager.instance.TryBuyToHand(unitData, this)) 
                     {
-                        if (child == transform) continue; 
-                        if (transform.position.x > child.position.x) newIndex++;
+                        actionHandled = true;
                     }
+                }
+                else if (originalParent == GameManager.instance.playerHand)
+                {
+                    // Drag from Hand -> Board (Play)
+                    if (GameManager.instance.TryPlayCardToBoard(this, newIndex)) 
+                    {
+                        actionHandled = true;
+                    }
+                }
+                else if (originalParent == GameManager.instance.playerBoard)
+                {
+                    // Reorder on Board
+                    transform.SetParent(GameManager.instance.playerBoard);
                     transform.SetSiblingIndex(newIndex);
                     GameManager.instance.LogAction($"Reordered Board: {unitData.unitName} to pos {newIndex}");
                     actionHandled = true;
                 }
+
                 if (actionHandled) break;
             }
         }
@@ -386,14 +419,18 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
 
     void ReturnToStart()
     {
-        transform.SetParent(originalParent);
-        transform.SetSiblingIndex(originalIndex);
-        if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
+        transform.DOMove(originalParent.GetChild(originalIndex).position, 0.2f).OnComplete(() => {
+             transform.SetParent(originalParent);
+             transform.SetSiblingIndex(originalIndex);
+             if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
+        });
     }
 
     public void OnPointerClick(PointerEventData eventData)
     {
         if (eventData.dragging) return; 
+
+        transform.DOPunchScale(new Vector3(0.1f, 0.1f, 0), 0.1f);
 
         if (GameManager.instance.isTargetingMode)
         {
@@ -401,8 +438,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
             return;
         }
 
-        if (GameManager.instance.currentPhase != GameManager.GamePhase.Recruit) return;
-        if (GameManager.instance.isUnconscious) return;
+        if (GameManager.instance.currentPhase != GameManager.GamePhase.Recruit || GameManager.instance.isUnconscious) return;
 
         if (!isPurchased)
         {
