@@ -10,22 +10,24 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f939aad67108ef74b9bc26b9d4d97274, type: 3}
-  m_Name: GraveRobberScavenge
+  m_Name: LichDoctorBattlecry
   m_EditorClassIdentifier: Assembly-CSharp::AbilityData
   id: 
   name: 
   description: 
-  triggerType: 5
-  targetType: 1
-  effectType: 0
+  triggerType: 0
+  targetType: 9
+  effectType: 8
+  metaTriggerType: 0
+  abilityToGrant: {fileID: 0}
   chainedAbility: {fileID: 0}
   duration: 0
   scalingType: 0
   targetTribe: 0
-  valueX: 1
-  valueY: 0
+  valueX: 2
+  valueY: 2
   tokenUnit: {fileID: 0}
-  keywordToGive: 0
+  keywordToGive: 2
   vfxPrefab: {fileID: 0}
   soundEffect: {fileID: 0}
   vfxSpawnPoint: 0

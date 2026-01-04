@@ -10,23 +10,22 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 00e4fb7d95a6d1e4183f887e469ccdf6, type: 3}
-  m_Name: HauntedMirror
+  m_Name: Smuggler
   m_EditorClassIdentifier: Assembly-CSharp::UnitData
   id: 
-  unitName: Haunted Mirror
+  unitName: Snitch
   description: 
-  tier: 1
+  tier: 3
   cost: 3
-  baseAttack: 0
+  baseAttack: 4
   baseHealth: 3
   hasTaunt: 0
   hasDivineShield: 0
   hasReborn: 0
-  tribe: 2
+  tribe: 1
   abilities:
-  - {fileID: 11400000, guid: c593366ac7df1a9468681dc3a042d801, type: 2}
-  - {fileID: 11400000, guid: 0ed484fbf597eec41a1fc423fdf87b55, type: 2}
+  - {fileID: 11400000, guid: 485aaa57bea906f48a303bfc79a32ddc, type: 2}
   artwork: {fileID: 10913, guid: 0000000000000000f000000000000000, type: 0}
-  frameColor: {r: 0.22352941, g: 1, b: 0.078431375, a: 1}
+  frameColor: {r: 0, g: 1, b: 1, a: 1}
   unitModelPrefab: {fileID: 0}
   attackProjectilePrefab: {fileID: 0}

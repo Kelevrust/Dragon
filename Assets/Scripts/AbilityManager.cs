@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using System.Linq;
 
 public class AbilityManager : MonoBehaviour
 {
@@ -7,103 +8,148 @@ public class AbilityManager : MonoBehaviour
 
     void Awake() { instance = this; }
 
-    public void TriggerAbilities(AbilityTrigger trigger, CardDisplay sourceCard, Transform overrideBoard = null)
+    // --- CORE TRIGGER SYSTEM ---
+
+    public void TriggerAbilities(AbilityTrigger trigger, CardDisplay sourceCard, Transform overrideBoard = null, CardDisplay interactionTarget = null)
     {
         if (sourceCard == null) return;
-        if (sourceCard.unitData == null) return;
-        if (sourceCard.unitData.abilities == null) return;
+        
+        // Use Runtime Abilities
+        List<AbilityData> abilitiesToFire = sourceCard.runtimeAbilities;
+        if (abilitiesToFire == null || abilitiesToFire.Count == 0) 
+        {
+            if (sourceCard.unitData != null) abilitiesToFire = sourceCard.unitData.abilities;
+        }
 
-        foreach (AbilityData ability in sourceCard.unitData.abilities)
+        if (abilitiesToFire == null) return;
+
+        // 1. Check for Meta-Multipliers (e.g. Rivendare)
+        int executionCount = 1;
+        
+        Transform boardToScan = overrideBoard;
+        if (boardToScan == null && sourceCard.transform.parent != null) boardToScan = sourceCard.transform.parent;
+        
+        if (boardToScan != null)
+        {
+            foreach(Transform child in boardToScan)
+            {
+                CardDisplay unit = child.GetComponent<CardDisplay>();
+                if (unit != null && unit.gameObject.activeInHierarchy && unit.runtimeAbilities != null)
+                {
+                    foreach(var ab in unit.runtimeAbilities)
+                    {
+                        if (ab.triggerType == AbilityTrigger.PassiveAura && 
+                            ab.effectType == AbilityEffect.ModifyTriggerCount &&
+                            ab.metaTriggerType == trigger)
+                        {
+                            int mult = unit.isGolden ? ab.valueX + 1 : ab.valueX; 
+                            executionCount = Mathf.Max(executionCount, mult);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Execute
+        foreach (AbilityData ability in abilitiesToFire)
         {
             if (ability != null && ability.triggerType == trigger)
             {
-                ExecuteAbility(ability, sourceCard, null, overrideBoard);
-            }
-        }
-    }
-
-    public void TriggerTurnEndAbilities()
-    {
-        if (GameManager.instance == null || GameManager.instance.playerBoard == null) return;
-
-        List<CardDisplay> boardUnits = new List<CardDisplay>();
-        foreach(Transform t in GameManager.instance.playerBoard) 
-        {
-            CardDisplay cd = t.GetComponent<CardDisplay>();
-            if (cd != null) boardUnits.Add(cd);
-        }
-
-        foreach (CardDisplay unit in boardUnits)
-        {
-            TriggerAbilities(AbilityTrigger.OnTurnEnd, unit, GameManager.instance.playerBoard);
-        }
-    }
-    
-    public void TriggerTurnStartAbilities()
-    {
-        if (GameManager.instance == null || GameManager.instance.playerBoard == null) return;
-
-        List<CardDisplay> boardUnits = new List<CardDisplay>();
-        foreach(Transform t in GameManager.instance.playerBoard) 
-        {
-            CardDisplay cd = t.GetComponent<CardDisplay>();
-            if (cd != null) boardUnits.Add(cd);
-        }
-
-        foreach (CardDisplay unit in boardUnits)
-        {
-            TriggerAbilities(AbilityTrigger.OnTurnStart, unit, GameManager.instance.playerBoard);
-        }
-    }
-
-    public void TriggerAllyPlayAbilities(CardDisplay playedCard, Transform board)
-    {
-        if (board == null || playedCard == null) return;
-        if (playedCard.unitData == null) return;
-
-        foreach(Transform child in board)
-        {
-            if (child == null) continue;
-            
-            CardDisplay ally = child.GetComponent<CardDisplay>();
-            
-            if (ally == null) continue;
-            if (ally == playedCard) continue;
-            if (!ally.gameObject.activeInHierarchy) continue;
-            if (ally.unitData == null) continue;
-            if (ally.unitData.abilities == null) continue; 
-
-            foreach (AbilityData ability in ally.unitData.abilities)
-            {
-                if (ability == null) continue;
-
-                if (ability.triggerType == AbilityTrigger.OnAllyPlay)
+                for(int i = 0; i < executionCount; i++)
                 {
-                    bool tribeMatch = ability.targetTribe == Tribe.None || ability.targetTribe == playedCard.unitData.tribe;
-                    
-                    if (tribeMatch)
-                    {
-                        ExecuteAbility(ability, ally, null, board);
-                    }
+                    ExecuteAbility(ability, sourceCard, interactionTarget, overrideBoard);
                 }
             }
         }
     }
 
+    // --- SPECIFIC EVENT HANDLERS ---
+
+    public void TriggerTurnStartAbilities()
+    {
+        TriggerBoardPhase(AbilityTrigger.OnTurnStart);
+    }
+
+    public void TriggerTurnEndAbilities()
+    {
+        TriggerBoardPhase(AbilityTrigger.OnTurnEnd);
+    }
+    
+    public void TriggerCombatStartAbilities()
+    {
+        TriggerBoardPhase(AbilityTrigger.OnCombatStart);
+    }
+
+    void TriggerBoardPhase(AbilityTrigger trigger)
+    {
+        if (GameManager.instance == null || GameManager.instance.playerBoard == null) return;
+
+        List<CardDisplay> units = new List<CardDisplay>();
+        foreach(Transform t in GameManager.instance.playerBoard) 
+        {
+            if (t.gameObject.activeInHierarchy)
+                units.Add(t.GetComponent<CardDisplay>());
+        }
+
+        foreach (CardDisplay unit in units)
+        {
+            if (unit != null) TriggerAbilities(trigger, unit, GameManager.instance.playerBoard);
+        }
+    }
+
+    public void HandleGlobalDeathTriggers(CardDisplay deadUnit, Transform alliesBoard, Transform enemiesBoard)
+    {
+        // 1. Process Allies
+        if (alliesBoard != null)
+        {
+            foreach(Transform child in alliesBoard)
+            {
+                if (child == null) continue;
+                CardDisplay ally = child.GetComponent<CardDisplay>();
+                
+                if (ally != null && ally != deadUnit && ally.gameObject.activeInHierarchy)
+                {
+                    TriggerAbilities(AbilityTrigger.OnAllyDeath, ally, alliesBoard, deadUnit);
+                    TriggerAbilities(AbilityTrigger.OnAnyDeath, ally, alliesBoard, deadUnit);
+                }
+            }
+        }
+
+        // 2. Process Enemies
+        if (enemiesBoard != null)
+        {
+            foreach(Transform child in enemiesBoard)
+            {
+                if (child == null) continue;
+                CardDisplay enemy = child.GetComponent<CardDisplay>();
+                
+                if (enemy != null && enemy.gameObject.activeInHierarchy)
+                {
+                    TriggerAbilities(AbilityTrigger.OnEnemyDeath, enemy, enemiesBoard, deadUnit);
+                    TriggerAbilities(AbilityTrigger.OnAnyDeath, enemy, enemiesBoard, deadUnit);
+                }
+            }
+        }
+    }
+    
+    // Legacy method for CombatManager compatibility
     public void TriggerAllyDeathAbilities(CardDisplay deadUnit, Transform board)
     {
         if (board == null) return;
-
         foreach(Transform child in board)
         {
             if (child == null) continue;
-
             CardDisplay ally = child.GetComponent<CardDisplay>();
             if (ally != null && ally != deadUnit && ally.gameObject.activeInHierarchy)
             {
-                TriggerAbilities(AbilityTrigger.OnAllyDeath, ally, board);
+                TriggerAbilities(AbilityTrigger.OnAllyDeath, ally, board, deadUnit);
             }
         }
+    }
+    
+    public void TriggerOnKill(CardDisplay killer, CardDisplay victim, Transform board)
+    {
+        TriggerAbilities(AbilityTrigger.OnEnemyKill, killer, board, victim);
     }
 
     public void TriggerShieldBreakAbilities(CardDisplay brokenUnit, Transform board)
@@ -119,19 +165,63 @@ public class AbilityManager : MonoBehaviour
             
             if (ally != null && ally != brokenUnit && ally.gameObject.activeInHierarchy)
             {
-                if (ally.unitData != null && ally.unitData.abilities != null)
+                if (ally.unitData != null)
                 {
-                     foreach (AbilityData ability in ally.unitData.abilities)
+                     // Check runtime abilities for shield break listeners
+                     List<AbilityData> abilities = ally.runtimeAbilities ?? ally.unitData.abilities;
+                     if (abilities != null)
                      {
-                         if (ability.triggerType == AbilityTrigger.OnShieldBreak)
+                         foreach (AbilityData ability in abilities)
                          {
-                             ExecuteAbility(ability, ally, brokenUnit, board);
+                             if (ability.triggerType == AbilityTrigger.OnShieldBreak)
+                             {
+                                 ExecuteAbility(ability, ally, brokenUnit, board);
+                             }
                          }
                      }
                 }
             }
         }
     }
+    
+    public void TriggerAttackAbilities(CardDisplay attacker, CardDisplay defender, Transform board)
+    {
+        TriggerAbilities(AbilityTrigger.OnAttack, attacker, board, defender);
+    }
+    
+    public void TriggerDamageDealtAbilities(CardDisplay dealer, CardDisplay victim, Transform board)
+    {
+        TriggerAbilities(AbilityTrigger.OnDealDamage, dealer, board, victim);
+    }
+    
+    public void TriggerAllyPlayAbilities(CardDisplay playedCard, Transform board)
+    {
+        if (board == null || playedCard == null) return;
+
+        foreach(Transform child in board)
+        {
+            CardDisplay ally = child.GetComponent<CardDisplay>();
+            if (ally == null || ally == playedCard || !ally.gameObject.activeInHierarchy) continue;
+
+            List<AbilityData> abilities = ally.runtimeAbilities ?? ally.unitData.abilities;
+            if (abilities != null)
+            {
+                foreach (AbilityData ability in abilities)
+                {
+                    if (ability != null && ability.triggerType == AbilityTrigger.OnAllyPlay)
+                    {
+                        bool tribeMatch = ability.targetTribe == Tribe.None || (playedCard.unitData != null && ability.targetTribe == playedCard.unitData.tribe);
+                        if (tribeMatch)
+                        {
+                            ExecuteAbility(ability, ally, playedCard, board);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // --- HERO POWERS ---
 
     public void CastHeroPower(AbilityData ability)
     {
@@ -146,11 +236,13 @@ public class AbilityManager : MonoBehaviour
         
         if (GameManager.instance.TrySpendGold(GameManager.instance.activeHero.powerCost))
         {
-            Debug.Log($"Casting Targeted Hero Power on {target.unitData.unitName}");
             ApplyEffect(ability, target, null, null);
         }
     }
 
+    // --- EXECUTION CORE ---
+
+    // Restored Method
     public void RecalculateAuras()
     {
         CardDisplay[] allCards = FindObjectsByType<CardDisplay>(FindObjectsSortMode.None);
@@ -163,16 +255,14 @@ public class AbilityManager : MonoBehaviour
 
         foreach (CardDisplay source in allCards)
         {
-            if (source == null) continue;
-            if (!source.gameObject.activeInHierarchy) continue; 
-            if (!source.isPurchased) continue; 
-            if (source.unitData == null || source.unitData.abilities == null) continue;
+            if (source == null || !source.gameObject.activeInHierarchy || !source.isPurchased) continue; 
+            
+            List<AbilityData> abilities = source.runtimeAbilities ?? source.unitData.abilities;
+            if (abilities == null) continue;
 
-            foreach (AbilityData ability in source.unitData.abilities)
+            foreach (AbilityData ability in abilities)
             {
-                if (ability == null) continue;
-
-                if (ability.triggerType == AbilityTrigger.PassiveAura)
+                if (ability != null && ability.triggerType == AbilityTrigger.PassiveAura)
                 {
                     ExecuteAbility(ability, source, null, null);
                 }
@@ -185,18 +275,18 @@ public class AbilityManager : MonoBehaviour
         }
     }
 
-    void ExecuteAbility(AbilityData ability, CardDisplay source, CardDisplay specificTarget, Transform overrideBoard)
+    void ExecuteAbility(AbilityData ability, CardDisplay source, CardDisplay interactionTarget, Transform overrideBoard)
     {
         if (ability == null) return;
 
-        List<CardDisplay> targets = FindTargets(ability, source, overrideBoard);
+        List<CardDisplay> targets = FindTargets(ability, source, interactionTarget, overrideBoard);
 
-        if (specificTarget != null)
-        {
-            if (targets.Count == 0) targets.Add(specificTarget);
-        }
+        bool isGlobalEffect = ability.effectType == AbilityEffect.SummonUnit || 
+                              ability.effectType == AbilityEffect.HealHero || 
+                              ability.effectType == AbilityEffect.ReduceUpgradeCost || 
+                              ability.effectType == AbilityEffect.GainGold;
 
-        if (targets.Count == 0 && (ability.targetType == AbilityTarget.None || ability.targetType == AbilityTarget.Self || ability.effectType == AbilityEffect.SummonUnit || ability.effectType == AbilityEffect.HealHero || ability.effectType == AbilityEffect.ReduceUpgradeCost || ability.effectType == AbilityEffect.GainGold))
+        if (targets.Count == 0 && isGlobalEffect)
         {
             ApplyEffect(ability, null, source, overrideBoard); 
         }
@@ -219,26 +309,32 @@ public class AbilityManager : MonoBehaviour
         bool isSourceGolden = source != null && source.isGolden;
         int mult = isSourceGolden ? 2 : 1;
 
+        int finalX = ability.valueX * mult;
+        int finalY = ability.valueY * mult;
+        
+        int scalingFactor = CalculateScaling(ability, source, overrideBoard);
+        if (scalingFactor != 1)
+        {
+            finalX *= scalingFactor;
+            finalY *= scalingFactor;
+        }
+
         switch (ability.effectType)
         {
             case AbilityEffect.BuffStats:
                 if (target != null)
                 {
-                    int atk = ability.valueX * mult;
-                    int hp = ability.valueY * mult;
-
-                    if (ability.triggerType == AbilityTrigger.PassiveAura)
+                    bool isPermanent = ability.duration == BuffDuration.Permanent;
+                    
+                    if (isPermanent)
                     {
-                        target.currentAttack += atk;
-                        target.currentHealth += hp;
+                        target.permanentAttack += finalX;
+                        target.permanentHealth += finalY;
                     }
-                    else
-                    {
-                        target.permanentAttack += atk;
-                        target.permanentHealth += hp;
-                        target.ResetToPermanent(); 
-                        target.UpdateVisuals();
-                    }
+                    
+                    target.currentAttack += finalX;
+                    target.currentHealth += finalY;
+                    target.UpdateVisuals();
                 }
                 break;
 
@@ -251,13 +347,10 @@ public class AbilityManager : MonoBehaviour
 
                 if (spawnParent != null && GameManager.instance != null)
                 {
-                    // 1. Determine Count from Data (Default to 1 if ValueX is 0)
                     int baseCount = Mathf.Max(1, ability.valueX);
-                    
-                    // 2. Apply Golden Multiplier (Doubles the spawn count)
                     int finalCount = isSourceGolden ? baseCount * 2 : baseCount;
 
-                    for(int i = 0; i < finalCount; i++)
+                    for(int i=0; i<finalCount; i++)
                     {
                         if (spawnParent.childCount < 7)
                         {
@@ -304,35 +397,99 @@ public class AbilityManager : MonoBehaviour
             case AbilityEffect.GiveKeyword:
                 if (target != null)
                 {
-                    if (ability.keywordToGive == KeywordType.DivineShield) target.hasDivineShield = true;
-                    if (ability.keywordToGive == KeywordType.Reborn) target.hasReborn = true;
+                    bool isPerm = ability.duration == BuffDuration.Permanent;
+                    if (ability.keywordToGive != KeywordType.None)
+                        target.GainKeyword(ability.keywordToGive, isPerm);
+                }
+                break;
+
+            case AbilityEffect.Magnetize:
+                if (target != null && source != null && target != source)
+                {
+                    target.permanentAttack += source.permanentAttack;
+                    target.permanentHealth += source.permanentHealth;
+                    target.currentAttack += source.currentAttack;
+                    target.currentHealth += source.currentHealth;
+                    
+                    if (source.hasDivineShield) target.GainKeyword(KeywordType.DivineShield, true);
+                    if (source.hasReborn) target.GainKeyword(KeywordType.Reborn, true);
+                    if (source.hasPoison) target.GainKeyword(KeywordType.Poison, true);
+                    if (source.hasVenomous) target.GainKeyword(KeywordType.Venomous, true);
+                    if (source.hasTaunt) target.GainKeyword(KeywordType.Taunt, true);
+
+                    if (source.runtimeAbilities != null)
+                    {
+                        foreach(var ab in source.runtimeAbilities)
+                        {
+                            if (ab.effectType != AbilityEffect.Magnetize) target.AddAbility(ab);
+                        }
+                    }
+                    
                     target.UpdateVisuals();
+                    Destroy(source.gameObject);
+                    RecalculateAuras();
+                }
+                break;
+
+            case AbilityEffect.GrantAbility:
+                if (target != null && ability.abilityToGrant != null)
+                {
+                    target.AddAbility(ability.abilityToGrant);
+                }
+                break;
+                
+            case AbilityEffect.ForceTrigger:
+                if (target != null)
+                {
+                    TriggerAbilities(ability.metaTriggerType, target, overrideBoard);
                 }
                 break;
         }
-    }
 
-    void PlayVFX(AbilityData ability, CardDisplay target, CardDisplay source)
-    {
-        if (ability.vfxPrefab == null) return;
-        Vector3 spawnPos = Vector3.zero;
-        switch (ability.vfxSpawnPoint)
+        if (ability.chainedAbility != null)
         {
-            case VFXSpawnPoint.Source: if (source != null) spawnPos = source.transform.position; break;
-            case VFXSpawnPoint.Target: if (target != null) spawnPos = target.transform.position; else if (source != null) spawnPos = source.transform.position; break;
-            case VFXSpawnPoint.CenterOfBoard: spawnPos = new Vector3(Screen.width/2f, Screen.height/2f, 0f); break;
+            ExecuteAbility(ability.chainedAbility, source, target, overrideBoard);
         }
-        spawnPos.z -= 10f; 
-        GameObject vfx = Instantiate(ability.vfxPrefab, spawnPos, Quaternion.identity);
-        Destroy(vfx, ability.vfxDuration);
     }
 
-    void PlaySound(AbilityData ability)
+    // --- HELPERS ---
+
+    int CalculateScaling(AbilityData ability, CardDisplay source, Transform board)
     {
-        if (ability.soundEffect != null) AudioSource.PlayClipAtPoint(ability.soundEffect, Vector3.zero);
+        if (ability.scalingType == ValueScaling.None) return 1;
+
+        int factor = 1;
+        
+        switch(ability.scalingType)
+        {
+            case ValueScaling.PerGold:
+                if (GameManager.instance != null) factor = GameManager.instance.gold;
+                break;
+            case ValueScaling.PerTribeOnBoard:
+                if (board != null)
+                {
+                    int count = 0;
+                    foreach(Transform child in board)
+                    {
+                        CardDisplay cd = child.GetComponent<CardDisplay>();
+                        if (cd != null && cd.unitData != null && cd.unitData.tribe == ability.targetTribe) count++;
+                    }
+                    factor = count;
+                }
+                break;
+            case ValueScaling.PerAllyCount:
+                if (board != null) factor = board.childCount;
+                break;
+            case ValueScaling.PerMissingHealth:
+                if (GameManager.instance != null) 
+                    factor = GameManager.instance.maxPlayerHealth - GameManager.instance.playerHealth;
+                break;
+        }
+        
+        return factor;
     }
 
-    List<CardDisplay> FindTargets(AbilityData ability, CardDisplay source, Transform overrideBoard)
+    List<CardDisplay> FindTargets(AbilityData ability, CardDisplay source, CardDisplay interactionTarget, Transform overrideBoard)
     {
         List<CardDisplay> targets = new List<CardDisplay>();
         
@@ -361,6 +518,7 @@ public class AbilityManager : MonoBehaviour
         {
             case AbilityTarget.None: break;
             case AbilityTarget.Self: if (source != null) targets.Add(source); break;
+            
             case AbilityTarget.RandomFriendly:
                 List<CardDisplay> validRandom = new List<CardDisplay>(allies);
                 if (source != null && validRandom.Contains(source)) validRandom.Remove(source);
@@ -381,7 +539,32 @@ public class AbilityManager : MonoBehaviour
                 foreach(var ally in allies) if (ally != source && ally.unitData.tribe == ability.targetTribe) tribeAllies.Add(ally);
                 if (tribeAllies.Count > 0) targets.Add(tribeAllies[Random.Range(0, tribeAllies.Count)]);
                 break;
+                
+            case AbilityTarget.Killer:
+            case AbilityTarget.Opponent:
+                if (interactionTarget != null) targets.Add(interactionTarget);
+                break;
         }
         return targets;
+    }
+
+    void PlayVFX(AbilityData ability, CardDisplay target, CardDisplay source)
+    {
+        if (ability.vfxPrefab == null) return;
+        Vector3 spawnPos = Vector3.zero;
+        switch (ability.vfxSpawnPoint)
+        {
+            case VFXSpawnPoint.Source: if (source != null) spawnPos = source.transform.position; break;
+            case VFXSpawnPoint.Target: if (target != null) spawnPos = target.transform.position; else if (source != null) spawnPos = source.transform.position; break;
+            case VFXSpawnPoint.CenterOfBoard: spawnPos = new Vector3(Screen.width/2f, Screen.height/2f, 0f); break;
+        }
+        spawnPos.z -= 10f; 
+        GameObject vfx = Instantiate(ability.vfxPrefab, spawnPos, Quaternion.identity);
+        Destroy(vfx, ability.vfxDuration);
+    }
+
+    void PlaySound(AbilityData ability)
+    {
+        if (ability.soundEffect != null) AudioSource.PlayClipAtPoint(ability.soundEffect, Vector3.zero);
     }
 }

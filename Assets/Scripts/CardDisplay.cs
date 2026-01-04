@@ -10,6 +10,9 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
 {
     public UnitData unitData;
     
+    // Runtime modification support
+    public List<AbilityData> runtimeAbilities = new List<AbilityData>();
+
     [Header("UI References")]
     public Image artworkImage;
     public TMP_Text nameText;
@@ -36,8 +39,21 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     
     public int damageTaken = 0;
     
+    [Header("Current Keywords")]
     public bool hasDivineShield;
     public bool hasReborn;
+    public bool hasTaunt;
+    public bool hasStealth;
+    public bool hasPoison;
+    public bool hasVenomous;
+
+    [Header("Permanent Keywords (Base State)")]
+    public bool permDivineShield;
+    public bool permReborn;
+    public bool permTaunt;
+    public bool permStealth;
+    public bool permPoison;
+    public bool permVenomous;
 
     private Color originalAttackColor = Color.black; 
     private Color originalHealthColor = Color.black;
@@ -77,15 +93,29 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         InitializeColors();
         unitData = data;
         
+        // Clone abilities to local list for runtime modification
+        runtimeAbilities.Clear();
+        if (data.abilities != null)
+        {
+            runtimeAbilities.AddRange(data.abilities);
+        }
+        
+        // Initialize Base Stats
         if (!isGolden)
         {
             permanentAttack = data.baseAttack;
             permanentHealth = data.baseHealth;
         }
         
-        hasDivineShield = data.hasDivineShield;
-        hasReborn = data.hasReborn;
-        
+        // Initialize Permanent Keywords from Data
+        permDivineShield = data.hasDivineShield;
+        permReborn = data.hasReborn;
+        permTaunt = data.hasTaunt;
+        // Assume default false for others until added to UnitData, or modify UnitData similarly
+        permStealth = false; 
+        permPoison = false;
+        permVenomous = false;
+
         damageTaken = 0;
         ResetToPermanent();
         UpdateVisuals();
@@ -95,6 +125,14 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     {
         currentAttack = permanentAttack;
         currentHealth = permanentHealth - damageTaken;
+
+        // Reset Keywords to their permanent state (removes temporary combat buffs)
+        hasDivineShield = permDivineShield;
+        hasReborn = permReborn;
+        hasTaunt = permTaunt;
+        hasStealth = permStealth;
+        hasPoison = permPoison;
+        hasVenomous = permVenomous;
     }
 
     public void MakeGolden()
@@ -106,6 +144,48 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         transform.DOPunchScale(Vector3.one * 0.2f, 0.5f, 10, 1);
         
         ResetToPermanent();
+        UpdateVisuals();
+    }
+    
+    public void AddAbility(AbilityData newAbility)
+    {
+        if (newAbility != null && !runtimeAbilities.Contains(newAbility))
+        {
+            runtimeAbilities.Add(newAbility);
+            UpdateVisuals(); 
+        }
+    }
+
+    // NEW: API to grant keywords with persistence logic
+    public void GainKeyword(KeywordType keyword, bool isPermanent)
+    {
+        switch (keyword)
+        {
+            case KeywordType.DivineShield:
+                hasDivineShield = true;
+                if (isPermanent) permDivineShield = true;
+                break;
+            case KeywordType.Reborn:
+                hasReborn = true;
+                if (isPermanent) permReborn = true;
+                break;
+            case KeywordType.Taunt:
+                hasTaunt = true;
+                if (isPermanent) permTaunt = true;
+                break;
+            case KeywordType.Stealth:
+                hasStealth = true;
+                if (isPermanent) permStealth = true;
+                break;
+            case KeywordType.Poison:
+                hasPoison = true;
+                if (isPermanent) permPoison = true;
+                break;
+            case KeywordType.Venomous:
+                hasVenomous = true;
+                if (isPermanent) permVenomous = true;
+                break;
+        }
         UpdateVisuals();
     }
 
@@ -121,7 +201,9 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
 
         damageTaken += amount;
         transform.DOShakePosition(0.2f, 3f, 20, 90, false, true);
-        ResetToPermanent();
+        
+        // Update stats but keep current keywords (don't full reset)
+        currentHealth = permanentHealth - damageTaken;
         UpdateVisuals();
     }
     
@@ -186,15 +268,19 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     {
         StringBuilder sb = new StringBuilder();
 
-        if (unitData.hasTaunt) sb.Append("<b>Taunt</b>. ");
+        // Use Runtime flags instead of static Data
+        if (hasTaunt) sb.Append("<b>Taunt</b>. ");
         if (hasDivineShield) sb.Append("<b>Divine Shield</b>. "); 
         if (hasReborn) sb.Append("<b>Reborn</b>. "); 
+        if (hasStealth) sb.Append("<b>Stealth</b>. ");
+        if (hasPoison) sb.Append("<b>Poison</b>. ");
+        if (hasVenomous) sb.Append("<b>Venomous</b>. ");
 
         if (sb.Length > 0) sb.Append("\n");
 
-        if (unitData.abilities != null)
+        if (runtimeAbilities != null)
         {
-            foreach (AbilityData ability in unitData.abilities)
+            foreach (AbilityData ability in runtimeAbilities)
             {
                 if (ability == null) continue;
 
@@ -210,6 +296,9 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
                         string tribe = ability.targetTribe != Tribe.None ? ability.targetTribe.ToString() : "Ally";
                         sb.Append($"<b>Synergy ({tribe}):</b> "); 
                         break;
+                    case AbilityTrigger.OnAttack: sb.Append("<b>On Attack:</b> "); break;
+                    case AbilityTrigger.OnDealDamage: sb.Append("<b>On Hit:</b> "); break;
+                    case AbilityTrigger.OnCombatStart: sb.Append("<b>Start of Combat:</b> "); break;
                 }
 
                 switch (ability.effectType)
@@ -236,9 +325,17 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
                         sb.Append($"Restore {heal} Health to Hero.");
                         break;
 
-                    case AbilityEffect.ReduceUpgradeCost:
-                        int red = isGolden ? ability.valueX * 2 : ability.valueX;
-                        sb.Append($"Reduce Tavern Upgrade cost by {red}.");
+                    case AbilityEffect.GrantAbility:
+                        string abilityName = ability.abilityToGrant != null ? ability.abilityToGrant.name : "Ability";
+                        sb.Append($"Give {GetTargetString(ability.targetType)} '{abilityName}'.");
+                        break;
+                        
+                    case AbilityEffect.Magnetize:
+                        sb.Append("<b>Magnetize</b> (Merge with Mech).");
+                        break;
+
+                    case AbilityEffect.GiveKeyword:
+                        sb.Append($"Give {GetTargetString(ability.targetType)} <b>{ability.keywordToGive}</b>.");
                         break;
                 }
                 sb.Append("\n");
@@ -343,7 +440,6 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         {
             GameObject hitObject = result.gameObject;
 
-            // Updated check to include both the Button and the new large transparent Zone
             if (hitObject.name.Contains("SellButton") || hitObject.name.Contains("SellZone")) 
             {
                 if (isPurchased)
@@ -370,22 +466,18 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
                 if (actionHandled) break;
             }
 
-            // --- IMPROVED BOARD DROP LOGIC ---
             bool hitBoard = hitObject.name == "PlayerBoard" || (hitObject.transform.parent != null && hitObject.transform.parent.name == "PlayerBoard");
             if (hitBoard)
             {
-                // Calculate position index
                 int newIndex = 0;
                 foreach(Transform child in GameManager.instance.playerBoard)
                 {
-                    // If we are already on the board, skip self to find relative index
                     if (child == transform) continue; 
                     if (transform.position.x > child.position.x) newIndex++;
                 }
 
                 if (!isPurchased)
                 {
-                    // Drag from Shop -> Board (Buy to Hand as requested)
                     if (GameManager.instance.TryBuyToHand(unitData, this)) 
                     {
                         actionHandled = true;
@@ -393,7 +485,6 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
                 }
                 else if (originalParent == GameManager.instance.playerHand)
                 {
-                    // Drag from Hand -> Board (Play)
                     if (GameManager.instance.TryPlayCardToBoard(this, newIndex)) 
                     {
                         actionHandled = true;
@@ -401,7 +492,6 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
                 }
                 else if (originalParent == GameManager.instance.playerBoard)
                 {
-                    // Reorder on Board
                     transform.SetParent(GameManager.instance.playerBoard);
                     transform.SetSiblingIndex(newIndex);
                     GameManager.instance.LogAction($"Reordered Board: {unitData.unitName} to pos {newIndex}");
