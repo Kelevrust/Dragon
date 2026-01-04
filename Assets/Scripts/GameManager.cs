@@ -92,6 +92,7 @@ public class GameManager : MonoBehaviour
         string logDetails = "";
 
         GameTester tester = FindFirstObjectByType<GameTester>();
+        // Only tag as AI if AutoPlay is actually ON
         if (tester != null && tester.isAutoPlaying)
         {
             playerType = "AI";
@@ -139,7 +140,10 @@ public class GameManager : MonoBehaviour
             if (currentPhaseTimer <= 0)
             {
                 currentPhaseTimer = 0;
+                
+                // Force cleanup of dragging cards before combat starts
                 CleanUpFloatingCards();
+                
                 if (combatManager != null) combatManager.StartCombat();
             }
         }
@@ -185,6 +189,7 @@ public class GameManager : MonoBehaviour
         #endif
     }
 
+    // --- LOGGING ---
     public void LogAction(string action)
     {
         Debug.Log($"<color=white>[ACTION]</color> {action}");
@@ -256,6 +261,7 @@ public class GameManager : MonoBehaviour
         currentPhase = GamePhase.Recruit;
         currentPhaseTimer = recruitTime;
 
+        // --- ECONOMY CALCULATION ---
         int standardTurnCap = Mathf.Min(3 + turnNumber, 10);
         maxGold = standardTurnCap; 
 
@@ -264,8 +270,10 @@ public class GameManager : MonoBehaviour
             int interest = 0;
             if (enableInterest)
             {
+                // Calculate interest on TOTAL WEALTH (Gold + Bank), not just hand gold
                 int totalWealth = gold + bankBalance;
                 interest = Mathf.Min(totalWealth / 10, interestCap);
+                
                 if (interest > 0) LogAction($"Gained {interest} Gold from Interest (Total Wealth: {totalWealth}).");
             }
             gold += baseIncome + interest;
@@ -280,6 +288,13 @@ public class GameManager : MonoBehaviour
             turnNumber == 1)
         {
             gold += activeHero.bonusValue;
+        }
+
+        // NEW: Trigger Start of Turn effects (e.g. Loan Shark)
+        if (AbilityManager.instance != null)
+        {
+            AbilityManager.instance.TriggerTurnStartAbilities();
+            AbilityManager.instance.RecalculateAuras();
         }
 
         DeselectUnit();
@@ -302,6 +317,7 @@ public class GameManager : MonoBehaviour
         return false;
     }
 
+    // --- BANKING API ---
     public void ToggleBankingMode(bool active)
     {
         enableGoldCarryover = active;
@@ -331,6 +347,7 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    // --- BOARD SPAWNING LOGIC ---
     public void SpawnUnitOnBoard(UnitData data)
     {
         if (playerBoard == null || cardPrefab == null) return;

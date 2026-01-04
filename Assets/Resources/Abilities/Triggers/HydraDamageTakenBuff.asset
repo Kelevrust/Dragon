@@ -10,21 +10,23 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f939aad67108ef74b9bc26b9d4d97274, type: 3}
-  m_Name: BattleCryBuff
+  m_Name: HydraDamageTakenBuff
   m_EditorClassIdentifier: Assembly-CSharp::AbilityData
   id: 
   name: 
   description: 
-  triggerType: 0
-  targetType: 2
+  triggerType: 5
+  targetType: 1
   effectType: 0
+  chainedAbility: {fileID: 11400000, guid: a218e81931b13c941b32371f977ec1b9, type: 2}
+  duration: 0
   scalingType: 0
   targetTribe: 0
-  valueX: 1
-  valueY: 1
+  valueX: 2
+  valueY: 2
   tokenUnit: {fileID: 0}
   keywordToGive: 0
-  vfxPrefab: {fileID: 7861736411326896951, guid: 473d97da44c18694c8b42bb176236cf5, type: 3}
+  vfxPrefab: {fileID: 0}
   soundEffect: {fileID: 0}
-  vfxSpawnPoint: 1
-  vfxDuration: 5
+  vfxSpawnPoint: 0
+  vfxDuration: 1

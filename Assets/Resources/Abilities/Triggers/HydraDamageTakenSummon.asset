@@ -10,17 +10,23 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f939aad67108ef74b9bc26b9d4d97274, type: 3}
-  m_Name: Sparkplug_Effect
+  m_Name: HydraDamageTakenSummon
   m_EditorClassIdentifier: Assembly-CSharp::AbilityData
-  triggerType: 7
+  id: 
+  name: 
+  description: 
+  triggerType: 5
   targetType: 1
-  targetTribe: 4
-  effectType: 0
+  effectType: 1
+  chainedAbility: {fileID: 11400000, guid: 66130fa907d08be42850a4302a7f1027, type: 2}
+  duration: 0
+  scalingType: 0
+  targetTribe: 0
   valueX: 1
   valueY: 0
-  tokenUnit: {fileID: 0}
-  spawnLocation: 0
+  tokenUnit: {fileID: 11400000, guid: 67d19f6cd30d9d340a8556b5fb2a5ecc, type: 2}
+  keywordToGive: 0
   vfxPrefab: {fileID: 0}
-  vfxSpawnPoint: 0
-  vfxDuration: 2
   soundEffect: {fileID: 0}
+  vfxSpawnPoint: 0
+  vfxDuration: 1

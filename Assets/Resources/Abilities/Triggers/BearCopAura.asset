@@ -10,14 +10,17 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f939aad67108ef74b9bc26b9d4d97274, type: 3}
-  m_Name: Snitch_Deathrattle
+  m_Name: BearCopAura
   m_EditorClassIdentifier: Assembly-CSharp::AbilityData
-  triggerType: 1
-  targetType: 0
+  triggerType: 7
+  targetType: 1
   targetTribe: 0
-  effectType: 5
-  valueX: 1
-  valueY: 0
+  effectType: 0
+  valueX: 0
+  valueY: 1
   tokenUnit: {fileID: 0}
   spawnLocation: 0
   vfxPrefab: {fileID: 0}
+  vfxSpawnPoint: 0
+  vfxDuration: 2
+  soundEffect: {fileID: 0}
