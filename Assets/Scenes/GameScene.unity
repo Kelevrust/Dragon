@@ -487,7 +487,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: -864.9999, y: 25}
+  m_AnchoredPosition: {x: -864.99994, y: 25}
   m_SizeDelta: {x: -1723.9, y: -131.734}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &46730723
@@ -2809,6 +2809,8 @@ MonoBehaviour:
   heroText: {fileID: 1839871306}
   tierText: {fileID: 1614209267}
   endTurnButtonText: {fileID: 1479088243}
+  bankPanel: {fileID: 0}
+  bankBalanceText: {fileID: 0}
   combatManager: {fileID: 0}
   isTargetingMode: 0
   pendingAbility: {fileID: 0}
@@ -3594,7 +3596,7 @@ MonoBehaviour:
   m_BlockingObjects: 0
   m_BlockingMask:
     serializedVersion: 2
-    m_Bits: 4294967295
+    m_Bits: 55
 --- !u!114 &832194392
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4701,7 +4703,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GameTester
   isAutoPlaying: 0
-  simulationSpeed: 5.5
+  simulationSpeed: 1.5
   stopOnTurn: 20
   stopOnDefeat: 0
   aiDifficulty: 1
@@ -4709,6 +4711,7 @@ MonoBehaviour:
   targetMMR: 5083
   distributeMMR: 1
   mmrVariance: 242
+  toggleEconomyMode: 0
   applyPoolOverrides: 0
   customPoolSizes: 00000000100000000f0000000d0000000b0000000900000007000000
   setGoldTo: -1
