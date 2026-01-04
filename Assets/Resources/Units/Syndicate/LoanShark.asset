@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: LoanShark
   m_EditorClassIdentifier: Assembly-CSharp::UnitData
   id: 
-  unitName: Snitch
+  unitName: Loan Shark
   description: 
   tier: 2
   cost: 3

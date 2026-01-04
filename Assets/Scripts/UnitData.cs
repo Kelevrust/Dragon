@@ -1,7 +1,8 @@
 using UnityEngine;
 using System.Collections.Generic;
 
-// UPDATED: Neon Noir Flavor
+// UPDATED: Preserved existing order to prevent data corruption.
+// Added new tribes (Fae, Giant, Dragon) at the end.
 public enum Tribe 
 { 
     None, 
@@ -10,7 +11,10 @@ public enum Tribe
     Feral,     // Beasts/Werewolves
     Construct, // Golems/Drones
     Arcane,    // Magic/Fae/Witches
-    Eldritch   // Demons/Cosmic Horror
+    Eldritch,  // Demons/Cosmic Horror
+    Fae,       // NEW
+    Giant,     // NEW
+    Dragon     // NEW
 }
 
 [CreateAssetMenu(fileName = "New Unit", menuName = "DnD Battler/Unit Data")]
@@ -19,28 +23,45 @@ public class UnitData : ScriptableObject
     [Header("Core Info")]
     public string id;
     public string unitName;
-    [TextArea] public string description;
+    [TextArea(3, 5)] public string description;
 
     [Header("Stats")]
     [Range(1, 6)] public int tier = 1;
     public int cost = 3;
     public int baseAttack;
     public int baseHealth;
-    
+
+    [Header("Flavor")]
+    public Tribe tribe;
+
     [Header("Keywords")]
     public bool hasTaunt;
     public bool hasDivineShield;
     public bool hasReborn;
     
-    [Header("Flavor")]
-    public Tribe tribe;
-    
-    [Header("New Ability System")]
+    // NEW: Expanded Keywords (Phase 4)
+    public bool hasStealth;
+    public bool hasPoison;    // Instantly kills
+    public bool hasVenomous;  // One-time instant kill
+
+    [Header("Ability System")]
     public List<AbilityData> abilities = new List<AbilityData>(); 
 
     [Header("Visuals")]
-    public Sprite artwork; 
-    public Color frameColor = Color.gray;
-    public GameObject unitModelPrefab;
-    public GameObject attackProjectilePrefab; // NEW: Projectile to fire on attack
+    public Sprite artwork;
+    public Color frameColor = Color.gray; // Kept your default gray
+    
+    // Kept your existing prefab reference
+    public GameObject unitModelPrefab; 
+    
+    // NEW: Projectile to fire on attack
+    public GameObject attackProjectilePrefab; 
+    
+    // NEW: Sound FX
+    public AudioClip attackSound;
+    public AudioClip deathSound;
+    
+    // NEW: Glamour / Transformation (Phase 4 Future Proofing)
+    [Header("Transformation")]
+    public UnitData transformationUnit;
 }

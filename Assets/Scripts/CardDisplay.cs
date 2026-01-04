@@ -111,10 +111,9 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         permDivineShield = data.hasDivineShield;
         permReborn = data.hasReborn;
         permTaunt = data.hasTaunt;
-        // Assume default false for others until added to UnitData, or modify UnitData similarly
-        permStealth = false; 
-        permPoison = false;
-        permVenomous = false;
+        permStealth = data.hasStealth;
+        permPoison = data.hasPoison;
+        permVenomous = data.hasVenomous;
 
         damageTaken = 0;
         ResetToPermanent();
@@ -156,7 +155,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         }
     }
 
-    // NEW: API to grant keywords with persistence logic
+    // API to grant keywords with persistence logic
     public void GainKeyword(KeywordType keyword, bool isPermanent)
     {
         switch (keyword)
@@ -466,18 +465,22 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
                 if (actionHandled) break;
             }
 
+            // --- IMPROVED BOARD DROP LOGIC ---
             bool hitBoard = hitObject.name == "PlayerBoard" || (hitObject.transform.parent != null && hitObject.transform.parent.name == "PlayerBoard");
             if (hitBoard)
             {
+                // Calculate position index
                 int newIndex = 0;
                 foreach(Transform child in GameManager.instance.playerBoard)
                 {
+                    // If we are already on the board, skip self to find relative index
                     if (child == transform) continue; 
                     if (transform.position.x > child.position.x) newIndex++;
                 }
 
                 if (!isPurchased)
                 {
+                    // Drag from Shop -> Board (Buy to Hand as requested)
                     if (GameManager.instance.TryBuyToHand(unitData, this)) 
                     {
                         actionHandled = true;
@@ -485,6 +488,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
                 }
                 else if (originalParent == GameManager.instance.playerHand)
                 {
+                    // Drag from Hand -> Board (Play)
                     if (GameManager.instance.TryPlayCardToBoard(this, newIndex)) 
                     {
                         actionHandled = true;
@@ -492,6 +496,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
                 }
                 else if (originalParent == GameManager.instance.playerBoard)
                 {
+                    // Reorder on Board
                     transform.SetParent(GameManager.instance.playerBoard);
                     transform.SetSiblingIndex(newIndex);
                     GameManager.instance.LogAction($"Reordered Board: {unitData.unitName} to pos {newIndex}");
