@@ -15,13 +15,15 @@ MonoBehaviour:
   id: 
   name: 
   description: 
-  triggerType: 0
-  targetType: 6
-  effectType: 8
+  triggerType: 1
+  targetType: 0
+  effectType: 1
+  chainedAbility: {fileID: 0}
+  duration: 0
   scalingType: 0
   targetTribe: 0
   valueX: 2
-  valueY: 1
+  valueY: 0
   tokenUnit: {fileID: 0}
   keywordToGive: 3
   vfxPrefab: {fileID: 0}
