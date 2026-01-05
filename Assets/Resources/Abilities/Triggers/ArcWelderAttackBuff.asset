@@ -10,12 +10,12 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f939aad67108ef74b9bc26b9d4d97274, type: 3}
-  m_Name: ArcWelderReaperBuff
+  m_Name: ArcWelderAttackBuff
   m_EditorClassIdentifier: Assembly-CSharp::AbilityData
   id: 
   name: 
   description: 
-  triggerType: 4
+  triggerType: 15
   targetType: 4
   effectType: 0
   metaTriggerType: 0
@@ -25,8 +25,8 @@ MonoBehaviour:
   scalingType: 0
   targetTribe: 0
   targetUnitFilter: {fileID: 0}
-  valueX: 0
-  valueY: 2
+  valueX: 2
+  valueY: 0
   tokenUnit: {fileID: 0}
   keywordToGive: 0
   vfxPrefab: {fileID: 0}

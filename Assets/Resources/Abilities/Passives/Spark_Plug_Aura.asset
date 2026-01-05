@@ -16,12 +16,15 @@ MonoBehaviour:
   name: 
   description: 
   triggerType: 2
-  targetType: 2
+  targetType: 7
   effectType: 0
+  metaTriggerType: 0
+  abilityToGrant: {fileID: 0}
   chainedAbility: {fileID: 0}
   duration: 0
   scalingType: 0
   targetTribe: 4
+  targetUnitFilter: {fileID: 0}
   valueX: 1
   valueY: 0
   tokenUnit: {fileID: 0}

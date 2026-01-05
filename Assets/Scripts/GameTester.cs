@@ -25,14 +25,14 @@ public class GameTester : MonoBehaviour
 
     [Header("--- DEBUG MENU ---")]
     [Header("Economy Overrides")]
-    public bool toggleEconomyMode = false; // Toggle to switch between Standard vs Accumulation
+    public bool toggleEconomyMode = false; 
     public bool applyPoolOverrides = false;
     [Tooltip("Copies of each unit per Tier (Index 1 = Tier 1)")]
     public int[] customPoolSizes = new int[] { 0, 16, 15, 13, 11, 9, 7 };
     
     [Header("Live Cheats")]
-    public int setGoldTo = -1; // -1 = ignore
-    public int setTavernTierTo = -1; // -1 = ignore
+    public int setGoldTo = -1; 
+    public int setTavernTierTo = -1; 
     
     [Header("Tribal Manipulation")]
     public Tribe tribeToAdd = Tribe.None;
@@ -162,10 +162,6 @@ public class GameTester : MonoBehaviour
         ShopManager.instance.SetPoolSizes(customPoolSizes);
     }
     
-    // ... (Remainder of existing AI logic like ApplyMMRSettings, RunBotDecision, TryBuyTriple, etc.) ...
-    // Note: Ensure the rest of the existing robust AI logic is kept below this point.
-    // I am including it here for completeness to avoid file truncation issues.
-    
     void ApplyMMRSettings()
     {
         var bots = LobbyManager.instance.opponents;
@@ -285,13 +281,16 @@ public class GameTester : MonoBehaviour
             if (!CanAfford(shopCard)) continue;
 
             int count = myCards.Count(c => c.unitData == shopCard.unitData && !c.isGolden);
-            if (count >= 2)
+            int shopCount = shopCards.Count(c => c.unitData == shopCard.unitData);
+            
+            if (count + shopCount >= 3 && count < 3) 
             {
-                Debug.Log($"Tester: Found Triple for {shopCard.unitData.unitName}!");
+                Debug.Log($"Tester: Found Triple path for {shopCard.unitData.unitName} (Owned: {count}, Shop: {shopCount})!");
                 
                 if (GetMyCardsOnBoard().Count >= 7 && !HasTripleComponents(shopCard))
                 {
                     var worstUnit = GetMyCardsOnBoard().OrderBy(c => c.isGolden).ThenBy(c => c.unitData.tier).First();
+                    
                     if (worstUnit.unitData != shopCard.unitData)
                     {
                         Debug.Log($"Tester: Selling {worstUnit.unitData.unitName} to make room for Triple.");
@@ -311,7 +310,10 @@ public class GameTester : MonoBehaviour
         List<CardDisplay> shopCards = GetShopCards();
         foreach (var card in shopCards)
         {
-            if (CanAfford(card)) return BuyCardSmart(card);
+            if (CanAfford(card))
+            {
+                return BuyCardSmart(card);
+            }
         }
         return false;
     }
@@ -320,9 +322,12 @@ public class GameTester : MonoBehaviour
     {
         List<CardDisplay> myCards = GetMyCardsOnBoard();
         if (myCards.Count < 7) return false;
+
         List<CardDisplay> shopCards = GetShopCards();
+        
         var worstUnit = myCards.OrderBy(c => c.isGolden).ThenBy(c => c.unitData.tier).First();
         var bestShop = shopCards.OrderByDescending(c => c.unitData.tier).FirstOrDefault();
+
         if (bestShop != null && CanAfford(bestShop))
         {
             if (bestShop.unitData.tier > worstUnit.unitData.tier)
@@ -356,28 +361,59 @@ public class GameTester : MonoBehaviour
         return false;
     }
 
-    bool CanAfford(CardDisplay card) => GameManager.instance.gold >= card.unitData.cost;
+    bool CanAfford(CardDisplay card)
+    {
+        return GameManager.instance.gold >= card.unitData.cost;
+    }
 
     List<CardDisplay> GetShopCards()
     {
         List<CardDisplay> list = new List<CardDisplay>();
         ShopManager shop = FindFirstObjectByType<ShopManager>();
-        if (shop != null) foreach (Transform t in shop.shopContainer) { CardDisplay cd = t.GetComponent<CardDisplay>(); if (cd != null) list.Add(cd); }
+        if (shop != null)
+        {
+            foreach (Transform t in shop.shopContainer)
+            {
+                CardDisplay cd = t.GetComponent<CardDisplay>();
+                if (cd != null) list.Add(cd);
+            }
+        }
         return list;
     }
 
     List<CardDisplay> GetMyCards()
     {
         List<CardDisplay> list = new List<CardDisplay>();
-        if (GameManager.instance.playerBoard != null) foreach (Transform t in GameManager.instance.playerBoard) { CardDisplay cd = t.GetComponent<CardDisplay>(); if (cd != null) list.Add(cd); }
-        if (GameManager.instance.playerHand != null) foreach (Transform t in GameManager.instance.playerHand) { CardDisplay cd = t.GetComponent<CardDisplay>(); if (cd != null) list.Add(cd); }
+        if (GameManager.instance.playerBoard != null)
+        {
+            foreach (Transform t in GameManager.instance.playerBoard)
+            {
+                CardDisplay cd = t.GetComponent<CardDisplay>();
+                if (cd != null) list.Add(cd);
+            }
+        }
+        if (GameManager.instance.playerHand != null)
+        {
+            foreach (Transform t in GameManager.instance.playerHand)
+            {
+                CardDisplay cd = t.GetComponent<CardDisplay>();
+                if (cd != null) list.Add(cd);
+            }
+        }
         return list;
     }
     
     List<CardDisplay> GetMyCardsOnBoard()
     {
         List<CardDisplay> list = new List<CardDisplay>();
-        if (GameManager.instance.playerBoard != null) foreach (Transform t in GameManager.instance.playerBoard) { CardDisplay cd = t.GetComponent<CardDisplay>(); if (cd != null) list.Add(cd); }
+        if (GameManager.instance.playerBoard != null)
+        {
+            foreach (Transform t in GameManager.instance.playerBoard)
+            {
+                CardDisplay cd = t.GetComponent<CardDisplay>();
+                if (cd != null) list.Add(cd);
+            }
+        }
         return list;
     }
     
@@ -390,7 +426,10 @@ public class GameTester : MonoBehaviour
     int GetUpgradeCost(ShopManager shop)
     {
         int nextTier = shop.tavernTier + 1;
-        if (nextTier < shop.tierCosts.Length) return Mathf.Max(0, shop.tierCosts[nextTier] - shop.currentDiscount);
+        if (nextTier < shop.tierCosts.Length)
+        {
+            return Mathf.Max(0, shop.tierCosts[nextTier] - shop.currentDiscount);
+        }
         return 99;
     }
 
@@ -403,6 +442,22 @@ public class GameTester : MonoBehaviour
              dsm.playAgainButton.onClick.Invoke();
              return;
         }
-        if (dsm.rollButton != null && dsm.rollButton.interactable) dsm.rollButton.onClick.Invoke();
+        
+        // Fix: Use correct variable names from updated DeathSaveManager
+        if (dsm.isPvPMode)
+        {
+            if (dsm.wagerButton != null && dsm.wagerButton.interactable)
+            {
+                Debug.Log("Tester: Taking the Wager (Coin Flip)!");
+                dsm.wagerButton.onClick.Invoke();
+            }
+        }
+        else
+        {
+            if (dsm.rollSaveButton != null && dsm.rollSaveButton.interactable) 
+            {
+                dsm.rollSaveButton.onClick.Invoke();
+            }
+        }
     }
 }

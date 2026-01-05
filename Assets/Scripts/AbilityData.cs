@@ -32,6 +32,8 @@ public enum AbilityTarget
     RandomFriendly, 
     RandomEnemy, 
     AdjacentFriendly,
+    AdjacentLeft,
+    AdjacentRight,
     AllFriendlyTribe,    
     RandomFriendlyTribe,
     SelectTarget,         // Required for targeted Hero Powers

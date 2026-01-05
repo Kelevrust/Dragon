@@ -630,6 +630,20 @@ public class AbilityManager : MonoBehaviour
                 if (index > 0) targets.Add(allies[index - 1]); 
                 if (index >= 0 && index < allies.Count - 1) targets.Add(allies[index + 1]); 
                 break;
+            case AbilityTarget.AdjacentLeft:
+                if (source != null) 
+                {
+                    int index = allies.IndexOf(source);
+                    if (index > 0) targets.Add(allies[index - 1]); // Left Neighbor
+                }
+                break;
+            case AbilityTarget.AdjacentRight:
+                if (source != null) 
+                {
+                    int index = allies.IndexOf(source);
+                    if (index >= 0 && index < allies.Count - 1) targets.Add(allies[index + 1]); // Right Neighbor
+                }
+                break;
             case AbilityTarget.AllFriendlyTribe:
                 foreach(var ally in allies) if (ally.unitData.tribe == ability.targetTribe) targets.Add(ally);
                 break;

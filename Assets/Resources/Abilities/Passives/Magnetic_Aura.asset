@@ -10,17 +10,26 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f939aad67108ef74b9bc26b9d4d97274, type: 3}
-  m_Name: SparkplugEffect
+  m_Name: Magnetic_Aura
   m_EditorClassIdentifier: Assembly-CSharp::AbilityData
-  triggerType: 7
-  targetType: 1
+  id: 
+  name: 
+  description: 
+  triggerType: 0
+  targetType: 6
+  effectType: 7
+  metaTriggerType: 0
+  abilityToGrant: {fileID: 0}
+  chainedAbility: {fileID: 0}
+  duration: 0
+  scalingType: 0
   targetTribe: 4
-  effectType: 0
+  targetUnitFilter: {fileID: 0}
   valueX: 1
   valueY: 0
   tokenUnit: {fileID: 0}
-  spawnLocation: 0
+  keywordToGive: 0
   vfxPrefab: {fileID: 0}
+  soundEffect: {fileID: 0}
   vfxSpawnPoint: 0
   vfxDuration: 2
-  soundEffect: {fileID: 0}

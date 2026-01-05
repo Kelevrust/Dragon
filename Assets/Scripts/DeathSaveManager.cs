@@ -9,16 +9,24 @@ public class DeathSaveManager : MonoBehaviour
 {
     public static DeathSaveManager instance;
 
+    [Header("Game Mode")]
+    public bool isPvPMode = true; // Toggle this based on scene/mode
+
     [Header("UI References")]
     public GameObject deathScreenPanel; 
-    public TMP_Text hpText;
-    public TMP_Text targetDCText;
-    public TMP_Text rollResultText;
-    public TMP_Text diceInfoText;
+    public TMP_Text titleText;
+    public TMP_Text infoText;
+    public TMP_Text resultText;
     
-    [Header("Action Buttons")]
-    public Button rollButton;     
-    public Button succumbButton;  
+    [Header("PvE Actions (D&D Style)")]
+    public GameObject pveContainer;
+    public Button rollSaveButton;     
+    public Button pveSuccumbButton;  
+
+    [Header("PvP Actions (The Wager)")]
+    public GameObject pvpContainer;
+    public Button wagerButton;      // "Cheat Death (50% Chance / Double Risk)"
+    public Button acceptFateButton; // "Pay the Ferryman (Standard Loss)"
 
     [Header("Game Over Buttons")]
     public Button mainMenuButton; 
@@ -28,103 +36,141 @@ public class DeathSaveManager : MonoBehaviour
     public int exhaustionLevel = 0;
     public int failureCount = 0;
     
-    private int[] diceSizes = new int[] { 20, 12, 10, 8, 6 };
-
     void Awake() { instance = this; }
 
     void Start()
     {
         if(deathScreenPanel != null) deathScreenPanel.SetActive(false);
-        
-        if(mainMenuButton != null) mainMenuButton.gameObject.SetActive(false);
-        if(playAgainButton != null) playAgainButton.gameObject.SetActive(false);
+        if(pveContainer != null) pveContainer.SetActive(false);
+        if(pvpContainer != null) pvpContainer.SetActive(false);
+        HideGameOverButtons();
     }
 
     public void StartDeathSequence()
     {
         deathScreenPanel.SetActive(true);
+        HideGameOverButtons();
+
+        if (isPvPMode)
+        {
+            SetupPvPDeath();
+        }
+        else
+        {
+            SetupPvEDeath();
+        }
+    }
+
+    // --- PVP LOGIC (THE WAGER) ---
+
+    void SetupPvPDeath()
+    {
+        pveContainer.SetActive(false);
+        pvpContainer.SetActive(true);
+
+        titleText.text = "YOU ARE DEAD";
+        infoText.text = "The Ferryman awaits his coin...\n\n<color=red>Risk it all?</color>\nWin: Revive with 1 HP\nLose: Double MMR Penalty";
+        resultText.text = "";
+
+        wagerButton.interactable = true;
+        wagerButton.onClick.RemoveAllListeners();
+        wagerButton.onClick.AddListener(FlipCoin);
+
+        acceptFateButton.interactable = true;
+        acceptFateButton.onClick.RemoveAllListeners();
+        acceptFateButton.onClick.AddListener(() => GameOver("You paid the Ferryman."));
+    }
+
+    public void FlipCoin()
+    {
+        wagerButton.interactable = false;
+        acceptFateButton.interactable = false;
+
+        float outcome = Random.value; // 0.0 to 1.0
+
+        if (outcome > 0.5f)
+        {
+            // WIN
+            resultText.text = "<color=green>DEATH REJECTED YOU.</color>";
+            StartCoroutine(PvPRevive());
+        }
+        else
+        {
+            // LOSS
+            resultText.text = "<color=red>THE ABYSS TAKES YOU.</color>";
+            // In a real backend, we would send a signal here to double the MMR deduction
+            GameOver("You gambled with your soul... and lost.");
+        }
+    }
+
+    IEnumerator PvPRevive()
+    {
+        yield return new WaitForSeconds(1.5f);
+        deathScreenPanel.SetActive(false);
         
-        rollButton.gameObject.SetActive(true);
-        succumbButton.gameObject.SetActive(true);
-        if(mainMenuButton != null) mainMenuButton.gameObject.SetActive(false);
-        if(playAgainButton != null) playAgainButton.gameObject.SetActive(false);
-
-        rollButton.interactable = true;
-        succumbButton.interactable = true;
+        GameManager.instance.playerHealth = 1;
+        GameManager.instance.isUnconscious = false;
+        GameManager.instance.UpdateUI();
         
-        rollButton.GetComponentInChildren<TMP_Text>().text = "ROLL TO SAVE";
-        rollButton.onClick.RemoveAllListeners();
-        rollButton.onClick.AddListener(RollDice);
+        // Return to shop immediately
+        if (CombatManager.instance != null) CombatManager.instance.ForceReturnToShop();
+    }
 
-        succumbButton.onClick.RemoveAllListeners();
-        succumbButton.onClick.AddListener(SuccumbToDeath);
+    // --- PVE LOGIC (D&D SAVES) ---
 
+    void SetupPvEDeath()
+    {
+        pvpContainer.SetActive(false);
+        pveContainer.SetActive(true);
+
+        titleText.text = "UNCONSCIOUS";
         int currentHP = GameManager.instance.playerHealth;
         int targetDC = Mathf.Abs(currentHP) + 1; 
 
-        hpText.text = $"Health: {currentHP}";
-        targetDCText.text = $"Save DC: {targetDC}";
-        rollResultText.text = "";
+        infoText.text = $"Constitution Save DC: {targetDC}\n(Failures: {failureCount}/3)";
+        resultText.text = "";
 
-        GetDiceConfig(exhaustionLevel, out int count, out int sides);
-        diceInfoText.text = $"Rolling {count}d{sides}\n(Exhaustion: {exhaustionLevel})";
-    }
+        rollSaveButton.interactable = true;
+        rollSaveButton.GetComponentInChildren<TMP_Text>().text = "ROLL SAVE";
+        rollSaveButton.onClick.RemoveAllListeners();
+        rollSaveButton.onClick.AddListener(RollDice);
 
-    void GetDiceConfig(int level, out int count, out int sides)
-    {
-        count = 3;
-        sides = 20;
-
-        if (level == 1) sides = 12;
-        else if (level == 2) sides = 10;
-        else if (level == 3) sides = 8;
-        else if (level == 4) sides = 6;
-        else if (level == 5) sides = 4;
-        else if (level == 6) { count = 2; sides = 4; }
-        else if (level >= 7) { count = 1; sides = 4; }
+        pveSuccumbButton.interactable = true;
+        pveSuccumbButton.onClick.RemoveAllListeners();
+        pveSuccumbButton.onClick.AddListener(() => GameOver("You succumbed to your wounds."));
     }
 
     public void RollDice()
     {
-        rollButton.interactable = false;
-        succumbButton.interactable = false; 
+        rollSaveButton.interactable = false;
+        pveSuccumbButton.interactable = false; 
         
-        GetDiceConfig(exhaustionLevel, out int count, out int sides);
-        
-        int total = 0;
-        string rollStr = "Rolled: ";
-        
-        for(int i=0; i<count; i++)
-        {
-            int r = Random.Range(1, sides + 1);
-            total += r;
-            rollStr += $"{r} ";
-            if(i < count -1) rollStr += "+ ";
-        }
+        // Simple D20 logic for now
+        int roll = Random.Range(1, 21);
+        int total = roll; // Add modifiers later?
 
         int currentHP = GameManager.instance.playerHealth;
         int targetDC = Mathf.Abs(currentHP) + 1;
 
-        rollStr += $"= <color=yellow><b>{total}</b></color>";
+        string res = $"Rolled: {roll}";
         
         if (total >= targetDC)
         {
-            rollStr += "\n<color=green>STABILIZED!</color>";
-            rollResultText.text = rollStr;
-            StartCoroutine(AutoStabilize());
+            res += "\n<color=green>STABILIZED!</color>";
+            resultText.text = res;
+            StartCoroutine(PvERevive());
         }
         else
         {
-            rollStr += "\n<color=red>FAILURE...</color>";
-            rollResultText.text = rollStr;
-            HandleFailure();
+            res += "\n<color=red>FAILURE...</color>";
+            resultText.text = res;
+            HandlePvEFailure();
         }
     }
 
-    IEnumerator AutoStabilize()
+    IEnumerator PvERevive()
     {
-        yield return new WaitForSeconds(1.5f); 
-        
+        yield return new WaitForSeconds(1.5f);
         deathScreenPanel.SetActive(false);
         exhaustionLevel++; 
         failureCount = 0;  
@@ -133,73 +179,50 @@ public class DeathSaveManager : MonoBehaviour
         GameManager.instance.isUnconscious = false;
         GameManager.instance.UpdateUI();
         
-        FindFirstObjectByType<CombatManager>().ForceReturnToShop();
+        if (CombatManager.instance != null) CombatManager.instance.ForceReturnToShop();
     }
 
-    void HandleFailure()
+    void HandlePvEFailure()
     {
         failureCount++;
-        
         if (failureCount >= 3)
         {
-            GameOver("You failed your death saving throws.\nYou have died.");
+            GameOver("You failed your death saving throws.");
         }
         else
         {
-            rollButton.interactable = true;
-            rollButton.GetComponentInChildren<TMP_Text>().text = "PASS OUT (Unconscious)";
-            rollButton.onClick.RemoveAllListeners();
-            rollButton.onClick.AddListener(ProceedUnconscious);
+            // Refresh UI for next roll
+            SetupPvEDeath();
         }
     }
 
-    void ProceedUnconscious()
+    // --- SHARED LOGIC ---
+
+    public void TriggerVictory()
     {
-        deathScreenPanel.SetActive(false);
-        GameManager.instance.isUnconscious = true;
-        FindFirstObjectByType<CombatManager>().ForceReturnToShop();
+        deathScreenPanel.SetActive(true);
+        pveContainer.SetActive(false);
+        pvpContainer.SetActive(false);
+        ShowGameOverButtons();
+
+        titleText.text = "VICTORY!";
+        infoText.text = "";
+        resultText.text = $"<color=green>CHAMPION</color>\nLast one standing.";
+        
+        if (GameManager.instance.heroText != null) GameManager.instance.heroText.text = "CHAMPION";
+        if (PlayerProfile.instance != null) PlayerProfile.instance.RecordMatchResult(1);
     }
 
     public void SuccumbToDeath()
     {
-        GameOver("You succumb to the cold embrace of death.");
-    }
-
-    // NEW: Victory Logic
-    public void TriggerVictory()
-    {
-        deathScreenPanel.SetActive(true);
-        
-        // Hide Death Actions
-        rollButton.gameObject.SetActive(false);
-        succumbButton.gameObject.SetActive(false);
-
-        ShowGameOverButtons();
-
-        // Clear Death Info
-        hpText.text = "";
-        targetDCText.text = "";
-        diceInfoText.text = "";
-        
-        rollResultText.text = $"<color=green>VICTORY!</color>\nYou are the last one standing!\n\nPlaced: #1";
-        
-        if (GameManager.instance.heroText != null) GameManager.instance.heroText.text = "CHAMPION";
-
-        // Record Win
-        if (PlayerProfile.instance != null)
-        {
-            PlayerProfile.instance.RecordMatchResult(1);
-            rollResultText.text += $"\nRank: {PlayerProfile.instance.mmr}";
-        }
+        GameOver("You concede.");
     }
 
     void GameOver(string flavorText)
     {
         deathScreenPanel.SetActive(true);
-        
-        rollButton.gameObject.SetActive(false);
-        succumbButton.gameObject.SetActive(false);
-
+        pveContainer.SetActive(false);
+        pvpContainer.SetActive(false);
         ShowGameOverButtons();
 
         // Calculate Placement
@@ -209,17 +232,16 @@ public class DeathSaveManager : MonoBehaviour
             int livingOpponents = LobbyManager.instance.opponents.Count(x => !x.isDead);
             placement = 1 + livingOpponents;
             
-            string rankText = "";
             if (PlayerProfile.instance != null)
             {
                 PlayerProfile.instance.RecordMatchResult(placement);
-                rankText = $"\nRank: {PlayerProfile.instance.mmr}";
+                flavorText += $"\n\nRank: {PlayerProfile.instance.mmr}";
             }
-            
-            flavorText += $"\n\nPlaced: #{placement}{rankText}";
+            flavorText += $"\nPlaced: #{placement}";
         }
 
-        rollResultText.text = $"<color=red>GAME OVER</color>\n{flavorText}";
+        titleText.text = "GAME OVER";
+        resultText.text = flavorText;
         if (GameManager.instance.heroText != null) GameManager.instance.heroText.text = "DEAD";
     }
 
@@ -244,5 +266,11 @@ public class DeathSaveManager : MonoBehaviour
                 SceneManager.LoadScene(SceneManager.GetActiveScene().name);
             });
         }
+    }
+    
+    void HideGameOverButtons()
+    {
+        if(mainMenuButton != null) mainMenuButton.gameObject.SetActive(false);
+        if(playAgainButton != null) playAgainButton.gameObject.SetActive(false);
     }
 }
