@@ -10,18 +10,21 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f939aad67108ef74b9bc26b9d4d97274, type: 3}
-  m_Name: FenrirBuff
+  m_Name: FenrirDamageTakenBuff
   m_EditorClassIdentifier: Assembly-CSharp::AbilityData
   id: 
   name: 
   description: 
-  triggerType: 5
+  triggerType: 11
   targetType: 1
   effectType: 0
-  chainedAbility: {fileID: 11400000, guid: a218e81931b13c941b32371f977ec1b9, type: 2}
+  metaTriggerType: 0
+  abilityToGrant: {fileID: 0}
+  chainedAbility: {fileID: 11400000}
   duration: 0
   scalingType: 0
   targetTribe: 0
+  targetUnitFilter: {fileID: 0}
   valueX: 2
   valueY: 2
   tokenUnit: {fileID: 0}

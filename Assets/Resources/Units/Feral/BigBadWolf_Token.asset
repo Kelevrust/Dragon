@@ -13,19 +13,26 @@ MonoBehaviour:
   m_Name: BigBadWolf_Token
   m_EditorClassIdentifier: Assembly-CSharp::UnitData
   id: 
-  unitName: Stray Dog
+  unitName: Big Bad Wolf
   description: 
+  cardType: 0
   tier: 1
   cost: 3
   baseAttack: 5
   baseHealth: 5
+  tribe: 3
   hasTaunt: 1
   hasDivineShield: 0
   hasReborn: 0
-  tribe: 3
+  hasStealth: 0
+  hasPoison: 0
+  hasVenomous: 0
   abilities:
   - {fileID: 0}
   artwork: {fileID: 10913, guid: 0000000000000000f000000000000000, type: 0}
   frameColor: {r: 1, g: 0.7490196, b: 0, a: 1}
   unitModelPrefab: {fileID: 0}
   attackProjectilePrefab: {fileID: 0}
+  attackSound: {fileID: 0}
+  deathSound: {fileID: 0}
+  transformationUnit: {fileID: 0}

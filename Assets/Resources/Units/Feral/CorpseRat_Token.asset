@@ -15,16 +15,25 @@ MonoBehaviour:
   id: 
   unitName: Corpse Rat
   description: 
+  cardType: 0
   tier: 1
   cost: 1
   baseAttack: 1
-  baseHealth: 1
+  baseHealth: 2
+  tribe: 3
   hasTaunt: 0
   hasDivineShield: 0
-  hasReborn: 0
-  tribe: 3
-  abilities: []
+  hasReborn: 1
+  hasStealth: 0
+  hasPoison: 0
+  hasVenomous: 1
+  hasRush: 0
+  abilities:
+  - {fileID: 0}
   artwork: {fileID: 10913, guid: 0000000000000000f000000000000000, type: 0}
-  frameColor: {r: 0.22352941, g: 1, b: 0.078431375, a: 1}
+  frameColor: {r: 1, g: 0.7490196, b: 0, a: 1}
   unitModelPrefab: {fileID: 0}
   attackProjectilePrefab: {fileID: 0}
+  attackSound: {fileID: 0}
+  deathSound: {fileID: 0}
+  transformationUnit: {fileID: 0}

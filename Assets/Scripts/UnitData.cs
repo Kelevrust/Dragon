@@ -2,7 +2,6 @@ using UnityEngine;
 using System.Collections.Generic;
 
 // UPDATED: Preserved existing order to prevent data corruption.
-// Added new tribes (Fae, Giant, Dragon) at the end.
 public enum Tribe 
 { 
     None, 
@@ -17,6 +16,13 @@ public enum Tribe
     Dragon     // NEW
 }
 
+// NEW: Support for Tavern Spells
+public enum CardType 
+{ 
+    Unit, 
+    Spell 
+}
+
 [CreateAssetMenu(fileName = "New Unit", menuName = "DnD Battler/Unit Data")]
 public class UnitData : ScriptableObject
 {
@@ -24,6 +30,7 @@ public class UnitData : ScriptableObject
     public string id;
     public string unitName;
     [TextArea(3, 5)] public string description;
+    public CardType cardType = CardType.Unit; // NEW: defaults to Unit
 
     [Header("Stats")]
     [Range(1, 6)] public int tier = 1;
@@ -43,6 +50,7 @@ public class UnitData : ScriptableObject
     public bool hasStealth;
     public bool hasPoison;    // Instantly kills
     public bool hasVenomous;  // One-time instant kill
+    public bool hasRush;      // Can attack immediately
 
     [Header("Ability System")]
     public List<AbilityData> abilities = new List<AbilityData>(); 

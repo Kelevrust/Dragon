@@ -10,22 +10,30 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 00e4fb7d95a6d1e4183f887e469ccdf6, type: 3}
-  m_Name: BlackShuck
+  m_Name: Fenrir
   m_EditorClassIdentifier: Assembly-CSharp::UnitData
   id: 
-  unitName: Black Shuck
+  unitName: Fenrir
   description: 
-  tier: 1
+  cardType: 0
+  tier: 6
   cost: 3
-  baseAttack: 3
-  baseHealth: 3
+  baseAttack: 10
+  baseHealth: 10
+  tribe: 3
   hasTaunt: 0
   hasDivineShield: 0
-  hasReborn: 0
-  tribe: 3
+  hasReborn: 1
+  hasStealth: 0
+  hasPoison: 0
+  hasVenomous: 0
   abilities:
-  - {fileID: 11400000, guid: 3f18c8ed4498682418ab0b5d38f24d5e, type: 2}
+  - {fileID: 11400000, guid: 52b8df2f4d7407f4b9273e12297f0bb3, type: 2}
+  - {fileID: 11400000, guid: abc24066e91451e43b29716b4ee27878, type: 2}
   artwork: {fileID: 10913, guid: 0000000000000000f000000000000000, type: 0}
   frameColor: {r: 1, g: 0.7490196, b: 0, a: 1}
   unitModelPrefab: {fileID: 0}
   attackProjectilePrefab: {fileID: 0}
+  attackSound: {fileID: 0}
+  deathSound: {fileID: 0}
+  transformationUnit: {fileID: 0}

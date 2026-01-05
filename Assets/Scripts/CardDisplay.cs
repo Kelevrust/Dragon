@@ -46,6 +46,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     public bool hasStealth;
     public bool hasPoison;
     public bool hasVenomous;
+    public bool hasRush; // NEW
 
     [Header("Permanent Keywords (Base State)")]
     public bool permDivineShield;
@@ -54,6 +55,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     public bool permStealth;
     public bool permPoison;
     public bool permVenomous;
+    public bool permRush; // NEW
 
     private Color originalAttackColor = Color.black; 
     private Color originalHealthColor = Color.black;
@@ -114,6 +116,8 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         permStealth = data.hasStealth;
         permPoison = data.hasPoison;
         permVenomous = data.hasVenomous;
+        // Need to add hasRush to UnitData eventually, defaulting false here
+        permRush = false; 
 
         damageTaken = 0;
         ResetToPermanent();
@@ -132,6 +136,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         hasStealth = permStealth;
         hasPoison = permPoison;
         hasVenomous = permVenomous;
+        hasRush = permRush;
     }
 
     public void MakeGolden()
@@ -183,6 +188,10 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
             case KeywordType.Venomous:
                 hasVenomous = true;
                 if (isPermanent) permVenomous = true;
+                break;
+            case KeywordType.Rush:
+                hasRush = true;
+                if (isPermanent) permRush = true;
                 break;
         }
         UpdateVisuals();
@@ -274,6 +283,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         if (hasStealth) sb.Append("<b>Stealth</b>. ");
         if (hasPoison) sb.Append("<b>Poison</b>. ");
         if (hasVenomous) sb.Append("<b>Venomous</b>. ");
+        if (hasRush) sb.Append("<b>Rush</b>. ");
 
         if (sb.Length > 0) sb.Append("\n");
 
@@ -298,6 +308,10 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
                     case AbilityTrigger.OnAttack: sb.Append("<b>On Attack:</b> "); break;
                     case AbilityTrigger.OnDealDamage: sb.Append("<b>On Hit:</b> "); break;
                     case AbilityTrigger.OnCombatStart: sb.Append("<b>Start of Combat:</b> "); break;
+                    case AbilityTrigger.OnAllySummon: sb.Append("<b>On Summon:</b> "); break;
+                    case AbilityTrigger.OnEnemyDeath: sb.Append("<b>On Kill (Witness):</b> "); break;
+                    case AbilityTrigger.OnAnyDeath: sb.Append("<b>On Any Death:</b> "); break;
+                    case AbilityTrigger.OnSpawn: sb.Append("<b>On Spawn:</b> "); break; // NEW
                 }
 
                 switch (ability.effectType)
@@ -311,7 +325,15 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
                     
                     case AbilityEffect.SummonUnit:
                         string tokenName = ability.tokenUnit != null ? ability.tokenUnit.unitName : "Unit";
-                        sb.Append($"Summon a {tokenName}.");
+                        int count = isGolden ? ability.valueX * 2 : Mathf.Max(1, ability.valueX);
+                        string countStr = count > 1 ? count.ToString() + " " : "a ";
+                        sb.Append($"Summon {countStr}{tokenName}.");
+                        break;
+
+                    case AbilityEffect.DealDamage:
+                        int dmg = isGolden ? ability.valueX * 2 : ability.valueX;
+                        string dmgTarget = GetTargetString(ability.targetType);
+                        sb.Append($"Deal {dmg} damage to {dmgTarget}.");
                         break;
                     
                     case AbilityEffect.GainGold:
@@ -336,6 +358,26 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
                     case AbilityEffect.GiveKeyword:
                         sb.Append($"Give {GetTargetString(ability.targetType)} <b>{ability.keywordToGive}</b>.");
                         break;
+
+                    case AbilityEffect.ModifyTriggerCount:
+                        int amount = isGolden ? ability.valueX * 2 : ability.valueX; // or +1
+                        string triggerName = ability.metaTriggerType.ToString().Replace("On", "");
+                        sb.Append($"Your {triggerName} triggers trigger {amount} times.");
+                        break;
+
+                    case AbilityEffect.ForceTrigger:
+                        string forcedTrigger = ability.metaTriggerType.ToString().Replace("On", "");
+                        sb.Append($"Trigger a {GetTargetString(ability.targetType)}'s {forcedTrigger}.");
+                        break;
+
+                    case AbilityEffect.ReduceUpgradeCost:
+                        int red = isGolden ? ability.valueX * 2 : ability.valueX;
+                        sb.Append($"Reduce Tavern Upgrade cost by {red}.");
+                        break;
+                        
+                    case AbilityEffect.ImmediateAttack:
+                        sb.Append("Attack immediately.");
+                        break;
                 }
                 sb.Append("\n");
             }
@@ -354,6 +396,9 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
             case AbilityTarget.AdjacentFriendly: return "adjacent allies";
             case AbilityTarget.AllFriendlyTribe: return "all friendly Tribe"; 
             case AbilityTarget.RandomFriendlyTribe: return "a random friendly Tribe";
+            case AbilityTarget.Opponent: return "enemy";
+            case AbilityTarget.AllEnemy: return "all enemies";
+            case AbilityTarget.RandomEnemy: return "random enemy";
             default: return "target";
         }
     }

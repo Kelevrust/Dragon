@@ -427,13 +427,17 @@ public class GameManager : MonoBehaviour
             {
                 if (currentPhase == GamePhase.Recruit)
                 {
-                    if (AbilityManager.instance != null)
-                    {
-                        AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnPlay, display);
-                    }
+                    // If spawned during Recruit (e.g. by ability), treat as Play? 
+                    // Usually tokens don't trigger "OnPlay".
+                    // But they DO trigger "OnAllySummon" now.
                 }
                 
-                if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
+                // NEW: Trigger Ally Summon effects (Pack Leader)
+                if (AbilityManager.instance != null)
+                {
+                    AbilityManager.instance.TriggerAllySummonAbilities(display, playerBoard);
+                    AbilityManager.instance.RecalculateAuras();
+                }
             }
             else if (targetParent != playerHand)
             {
@@ -538,7 +542,7 @@ public class GameManager : MonoBehaviour
         return true;
     }
 
-    // --- NEW: Buy directly to Board ---
+    // --- Buy directly to Board ---
     public bool TryBuyToBoard(UnitData data, CardDisplay sourceCard, int targetIndex = -1)
     {
         if (!TrySpendGold(data.cost)) return false;
@@ -564,6 +568,8 @@ public class GameManager : MonoBehaviour
         {
             AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnPlay, sourceCard);
             AbilityManager.instance.TriggerAllyPlayAbilities(sourceCard, playerBoard);
+            // NEW: Also trigger Summon effects (a buy to board is a summon)
+            AbilityManager.instance.TriggerAllySummonAbilities(sourceCard, playerBoard);
             AbilityManager.instance.RecalculateAuras();
         }
 
@@ -571,9 +577,25 @@ public class GameManager : MonoBehaviour
         return true;
     }
 
-    // --- UPDATED: Allow targeted placement ---
+    // --- Allow targeted placement ---
     public bool TryPlayCardToBoard(CardDisplay card, int targetIndex = -1)
     {
+        // 1. Spell Logic
+        if (card.unitData.cardType == CardType.Spell)
+        {
+            LogAction($"Cast Spell: {card.unitData.unitName}");
+
+            if (AbilityManager.instance != null)
+            {
+                AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnPlay, card);
+                AbilityManager.instance.RecalculateAuras();
+            }
+
+            Destroy(card.gameObject);
+            return true;
+        }
+
+        // 2. Unit Logic (Existing)
         if (playerBoard.childCount >= 7)
         {
             Debug.Log("Board is full!");
@@ -589,6 +611,8 @@ public class GameManager : MonoBehaviour
         {
             AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnPlay, card);
             AbilityManager.instance.TriggerAllyPlayAbilities(card, playerBoard);
+            // NEW: Trigger Summon effects
+            AbilityManager.instance.TriggerAllySummonAbilities(card, playerBoard);
             AbilityManager.instance.RecalculateAuras(); 
         }
 

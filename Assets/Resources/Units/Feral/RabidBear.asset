@@ -10,16 +10,16 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 00e4fb7d95a6d1e4183f887e469ccdf6, type: 3}
-  m_Name: StrayPup_Token
+  m_Name: RabidBear
   m_EditorClassIdentifier: Assembly-CSharp::UnitData
   id: 
-  unitName: Stray Pup
+  unitName: Rabid Bear
   description: 
   cardType: 0
-  tier: 1
+  tier: 3
   cost: 3
-  baseAttack: 1
-  baseHealth: 1
+  baseAttack: 4
+  baseHealth: 4
   tribe: 3
   hasTaunt: 0
   hasDivineShield: 0
@@ -28,7 +28,7 @@ MonoBehaviour:
   hasPoison: 0
   hasVenomous: 0
   abilities:
-  - {fileID: 0}
+  - {fileID: 11400000, guid: a6699020cac9159479098d492609fbf8, type: 2}
   artwork: {fileID: 10913, guid: 0000000000000000f000000000000000, type: 0}
   frameColor: {r: 1, g: 0.7490196, b: 0, a: 1}
   unitModelPrefab: {fileID: 0}
