@@ -19,8 +19,9 @@ public enum AbilityTrigger
     OnShieldBreak,  // Steam Knight
     OnAttack,       // When this unit attacks
     OnDealDamage,   // When this unit deals damage
-    OnCombatStart,  // NEW: Rabid Bear / Sentry Turret
-    OnSpawn         // NEW: Fires on self when created (for Immediate Attack)
+    OnCombatStart,  // Rabid Bear
+    OnSpawn,        // Fires on self when created (for Immediate Attack)
+    OnSpellCast     // NEW: Specifically when a Tavern Spell is played
 }
 
 public enum AbilityTarget 
@@ -32,8 +33,8 @@ public enum AbilityTarget
     RandomFriendly, 
     RandomEnemy, 
     AdjacentFriendly,
-    AdjacentLeft,
-    AdjacentRight,
+    AdjacentLeft,         // Left Neighbor only
+    AdjacentRight,        // Right Neighbor only
     AllFriendlyTribe,    
     RandomFriendlyTribe,
     SelectTarget,         // Required for targeted Hero Powers
@@ -43,7 +44,8 @@ public enum AbilityTarget
     AllInHand,            // Targets Hand Only
     AllInShop,            // Targets Shop Only
     GlobalTribe,          // Targets ALL units of targetTribe (Player + Enemy)
-    GlobalCopies          // Targets ALL units matching targetUnitFilter (Player + Enemy)
+    GlobalCopies,         // Targets ALL units matching targetUnitFilter (Player + Enemy)
+    OpposingUnit          // NEW: The unit directly across on the board
 }
 
 public enum AbilityEffect 
@@ -60,18 +62,14 @@ public enum AbilityEffect
     ModifyTriggerCount, // Rivendare/Brann
     ForceTrigger,       // Trigger another unit's ability
     GrantAbility,       // Add a specific ability to the target's list
-    ImmediateAttack     // NEW: Forces a combat trade
+    ImmediateAttack,    // Forces a combat trade
+    Consume,            // Eat target, gain stats (optional: abilities)
+    Counter             // NEW: Prevent the next [ValueX] instances of [MetaTrigger] on Target
 }
 
 // Defines persistence logic
-public enum BuffDuration
-{
-    Permanent,       // Updates base stats. Persists after combat
-    CombatTemporary, // Updates current stats. Resets after combat
-    TurnTemporary    // Lasts until end of turn
-}
+public enum BuffDuration { Permanent, CombatTemporary, TurnTemporary }
 
-// Defines how the ValueX/ValueY should scale
 public enum ValueScaling
 {
     None,                   // Fixed value
@@ -92,7 +90,7 @@ public enum KeywordType
     Stealth, 
     Poison,   
     Venomous,
-    Rush      // NEW: Can attack immediately
+    Rush      
 }
 
 public enum VFXSpawnPoint { Target, Source, CenterOfBoard }
@@ -119,7 +117,7 @@ public class AbilityData : ScriptableObject
     public AbilityEffect effectType;
     
     [Header("Meta Logic")]
-    [Tooltip("Used for ModifyTriggerCount, ForceTrigger, or GrantAbility")]
+    [Tooltip("Used for ModifyTriggerCount, ForceTrigger, GrantAbility, or Counter (What to block?)")]
     public AbilityTrigger metaTriggerType;
     
     [Tooltip("The Ability Asset to grant when using 'GrantAbility' effect")]
@@ -149,6 +147,13 @@ public class AbilityData : ScriptableObject
     public int valueY; // e.g. Health Buff
     public UnitData tokenUnit; // For summon effects
     public KeywordType keywordToGive; 
+
+    [Header("Consume Settings")]
+    [Tooltip("If true, Consume also steals Keywords and Abilities (like Magnetize).")]
+    public bool consumeAbsorbsAbilities;
+    
+    [Tooltip("If true, Consume steals Keywords/Abilities ONLY when the source unit is Golden.")]
+    public bool consumeAbsorbsAbilitiesIfGolden;
 
     [Header("Visuals")]
     public GameObject vfxPrefab;

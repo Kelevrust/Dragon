@@ -43,6 +43,36 @@ public class GameTester : MonoBehaviour
     public HeroData heroToSwapIn;
     public bool triggerHeroSwap = false;
 
+    [Header("--- LIVE UNIT SPAWNER ---")]
+    [Tooltip("Drag a UnitData here to spawn it manually")]
+    public UnitData unitToSpawn;
+    public bool spawnOnPlayerBoard;
+    public bool spawnOnEnemyBoard;
+    
+    [Header("Test Dummies")]
+    [Tooltip("Spawns a 0/10 Unit with no abilities")]
+    public bool spawnTestDummyAlly;
+    [Tooltip("Spawns a 0/10 Unit with no abilities")]
+    public bool spawnTestDummyEnemy;
+
+    [Header("--- CUSTOM DUMMY CREATOR ---")]
+    public string dummyName = "Custom Test";
+    public int dummyAttack = 1;
+    public int dummyHealth = 1;
+    [Header("Custom Keywords")]
+    public bool dummyTaunt;
+    public bool dummyDivineShield;
+    public bool dummyPoison;
+    public bool dummyVenomous;
+    public bool dummyReborn;
+    public bool dummyStealth;
+    
+    [Header("Spawn Actions")]
+    [Tooltip("Spawns the custom configured unit on Player Board")]
+    public bool spawnCustomAlly;
+    [Tooltip("Spawns the custom configured unit on Enemy Board")]
+    public bool spawnCustomEnemy;
+
     [Header("Logic Delays")]
     public float actionInterval = 0.2f; 
     private float timer;
@@ -115,12 +145,12 @@ public class GameTester : MonoBehaviour
     {
         if (GameManager.instance == null) return;
 
+        // --- ECONOMY ---
         if (toggleEconomyMode)
         {
             bool newState = !GameManager.instance.enableGoldCarryover;
             GameManager.instance.ToggleBankingMode(newState);
             GameManager.instance.enableInterest = newState;
-            
             Debug.Log($"Tester: Toggled Economy Mode to {(newState ? "Accumulation" : "Standard")}");
             toggleEconomyMode = false;
         }
@@ -153,6 +183,116 @@ public class GameTester : MonoBehaviour
             GameManager.instance.UpdateUI();
             triggerHeroSwap = false;
         }
+
+        // --- SPAWNER ---
+        if (spawnOnPlayerBoard && unitToSpawn != null)
+        {
+            SpawnDebugUnit(unitToSpawn, true);
+            spawnOnPlayerBoard = false;
+        }
+        
+        if (spawnOnEnemyBoard && unitToSpawn != null)
+        {
+            SpawnDebugUnit(unitToSpawn, false);
+            spawnOnEnemyBoard = false;
+        }
+        
+        if (spawnTestDummyAlly)
+        {
+            SpawnDummy(true);
+            spawnTestDummyAlly = false;
+        }
+        
+        if (spawnTestDummyEnemy)
+        {
+            SpawnDummy(false);
+            spawnTestDummyEnemy = false;
+        }
+
+        // --- CUSTOM DUMMY ---
+        if (spawnCustomAlly)
+        {
+            SpawnCustomUnit(true);
+            spawnCustomAlly = false;
+        }
+        if (spawnCustomEnemy)
+        {
+            SpawnCustomUnit(false);
+            spawnCustomEnemy = false;
+        }
+    }
+
+    void SpawnDebugUnit(UnitData data, bool isPlayer)
+    {
+        if (GameManager.instance == null) return;
+        
+        // Determine correct parent
+        Transform parent = null;
+        if (isPlayer) 
+        {
+            parent = GameManager.instance.playerBoard;
+        }
+        else
+        {
+            if (CombatManager.instance != null) parent = CombatManager.instance.enemyBoard;
+        }
+        
+        if (parent == null || GameManager.instance.cardPrefab == null) return;
+        
+        GameObject obj = Instantiate(GameManager.instance.cardPrefab, parent);
+        CardDisplay cd = obj.GetComponent<CardDisplay>();
+        
+        if (cd != null)
+        {
+            cd.LoadUnit(data);
+            cd.isPurchased = true; 
+            
+            // If enemy, usually we remove buttons to prevent dragging them
+            if (!isPlayer) Destroy(obj.GetComponent<Button>());
+            
+            // Refresh Auras to catch new unit
+            if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
+        }
+        
+        Debug.Log($"Tester: Spawned {data.unitName} on {(isPlayer ? "Player" : "Enemy")} board.");
+    }
+    
+    void SpawnDummy(bool isPlayer)
+    {
+        // Create a temporary ScriptableObject in memory
+        UnitData dummy = ScriptableObject.CreateInstance<UnitData>();
+        dummy.name = "Test Subject";
+        dummy.unitName = "Test Subject";
+        dummy.description = "A generic target for testing interactions.";
+        dummy.baseAttack = 0;
+        dummy.baseHealth = 10;
+        dummy.cost = 0;
+        dummy.tier = 1;
+        dummy.abilities = new List<AbilityData>(); // Empty list to prevent null errors
+        
+        SpawnDebugUnit(dummy, isPlayer);
+    }
+
+    void SpawnCustomUnit(bool isPlayer)
+    {
+        UnitData custom = ScriptableObject.CreateInstance<UnitData>();
+        custom.name = dummyName;
+        custom.unitName = dummyName;
+        custom.description = "Custom Debug Unit created at Runtime.";
+        custom.baseAttack = dummyAttack;
+        custom.baseHealth = dummyHealth;
+        custom.cost = 0;
+        custom.tier = 1;
+        custom.hasTaunt = dummyTaunt;
+        custom.hasDivineShield = dummyDivineShield;
+        custom.hasPoison = dummyPoison;
+        custom.hasVenomous = dummyVenomous;
+        custom.hasReborn = dummyReborn;
+        custom.hasStealth = dummyStealth;
+        
+        custom.abilities = new List<AbilityData>();
+
+        SpawnDebugUnit(custom, isPlayer);
     }
 
     void ApplyPoolOverrides()
@@ -361,59 +501,28 @@ public class GameTester : MonoBehaviour
         return false;
     }
 
-    bool CanAfford(CardDisplay card)
-    {
-        return GameManager.instance.gold >= card.unitData.cost;
-    }
+    bool CanAfford(CardDisplay card) => GameManager.instance.gold >= card.unitData.cost;
 
     List<CardDisplay> GetShopCards()
     {
         List<CardDisplay> list = new List<CardDisplay>();
         ShopManager shop = FindFirstObjectByType<ShopManager>();
-        if (shop != null)
-        {
-            foreach (Transform t in shop.shopContainer)
-            {
-                CardDisplay cd = t.GetComponent<CardDisplay>();
-                if (cd != null) list.Add(cd);
-            }
-        }
+        if (shop != null) foreach (Transform t in shop.shopContainer) { CardDisplay cd = t.GetComponent<CardDisplay>(); if (cd != null) list.Add(cd); }
         return list;
     }
 
     List<CardDisplay> GetMyCards()
     {
         List<CardDisplay> list = new List<CardDisplay>();
-        if (GameManager.instance.playerBoard != null)
-        {
-            foreach (Transform t in GameManager.instance.playerBoard)
-            {
-                CardDisplay cd = t.GetComponent<CardDisplay>();
-                if (cd != null) list.Add(cd);
-            }
-        }
-        if (GameManager.instance.playerHand != null)
-        {
-            foreach (Transform t in GameManager.instance.playerHand)
-            {
-                CardDisplay cd = t.GetComponent<CardDisplay>();
-                if (cd != null) list.Add(cd);
-            }
-        }
+        if (GameManager.instance.playerBoard != null) foreach (Transform t in GameManager.instance.playerBoard) { CardDisplay cd = t.GetComponent<CardDisplay>(); if (cd != null) list.Add(cd); }
+        if (GameManager.instance.playerHand != null) foreach (Transform t in GameManager.instance.playerHand) { CardDisplay cd = t.GetComponent<CardDisplay>(); if (cd != null) list.Add(cd); }
         return list;
     }
     
     List<CardDisplay> GetMyCardsOnBoard()
     {
         List<CardDisplay> list = new List<CardDisplay>();
-        if (GameManager.instance.playerBoard != null)
-        {
-            foreach (Transform t in GameManager.instance.playerBoard)
-            {
-                CardDisplay cd = t.GetComponent<CardDisplay>();
-                if (cd != null) list.Add(cd);
-            }
-        }
+        if (GameManager.instance.playerBoard != null) foreach (Transform t in GameManager.instance.playerBoard) { CardDisplay cd = t.GetComponent<CardDisplay>(); if (cd != null) list.Add(cd); }
         return list;
     }
     
@@ -426,10 +535,7 @@ public class GameTester : MonoBehaviour
     int GetUpgradeCost(ShopManager shop)
     {
         int nextTier = shop.tavernTier + 1;
-        if (nextTier < shop.tierCosts.Length)
-        {
-            return Mathf.Max(0, shop.tierCosts[nextTier] - shop.currentDiscount);
-        }
+        if (nextTier < shop.tierCosts.Length) return Mathf.Max(0, shop.tierCosts[nextTier] - shop.currentDiscount);
         return 99;
     }
 

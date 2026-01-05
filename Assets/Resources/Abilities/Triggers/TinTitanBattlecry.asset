@@ -10,22 +10,22 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f939aad67108ef74b9bc26b9d4d97274, type: 3}
-  m_Name: Magnetic_Aura
+  m_Name: TinTitanBattlecry
   m_EditorClassIdentifier: Assembly-CSharp::AbilityData
   id: 
   name: 
   description: 
   triggerType: 0
-  targetType: 7
-  effectType: 7
+  targetType: 11
+  effectType: 13
   metaTriggerType: 0
   abilityToGrant: {fileID: 0}
   chainedAbility: {fileID: 0}
   duration: 0
   scalingType: 0
-  targetTribe: 4
+  targetTribe: 0
   targetUnitFilter: {fileID: 0}
-  valueX: 1
+  valueX: 2
   valueY: 0
   tokenUnit: {fileID: 0}
   keywordToGive: 0

@@ -18,14 +18,19 @@ MonoBehaviour:
   triggerType: 1
   targetType: 0
   effectType: 1
+  metaTriggerType: 0
+  abilityToGrant: {fileID: 0}
   chainedAbility: {fileID: 0}
   duration: 0
   scalingType: 0
   targetTribe: 0
+  targetUnitFilter: {fileID: 0}
   valueX: 2
   valueY: 0
-  tokenUnit: {fileID: 0}
+  tokenUnit: {fileID: 11400000, guid: 142263c2f3158417982e39acda35ff77, type: 2}
   keywordToGive: 3
+  consumeAbsorbsAbilities: 0
+  consumeAbsorbsAbilitiesIfGolden: 0
   vfxPrefab: {fileID: 0}
   soundEffect: {fileID: 0}
   vfxSpawnPoint: 0

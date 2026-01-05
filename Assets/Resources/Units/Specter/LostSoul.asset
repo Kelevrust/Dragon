@@ -10,10 +10,10 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 00e4fb7d95a6d1e4183f887e469ccdf6, type: 3}
-  m_Name: SkeletonCrew_Token
+  m_Name: LostSoul
   m_EditorClassIdentifier: Assembly-CSharp::UnitData
   id: 
-  unitName: Skeleton Crew
+  unitName: Lost Soul
   description: 
   cardType: 0
   tier: 1
@@ -28,7 +28,8 @@ MonoBehaviour:
   hasPoison: 0
   hasVenomous: 0
   hasRush: 0
-  abilities: []
+  abilities:
+  - {fileID: 11400000, guid: 7521d045b40d7f9429e76e2c182da8a0, type: 2}
   artwork: {fileID: 10913, guid: 0000000000000000f000000000000000, type: 0}
   frameColor: {r: 0.22352941, g: 1, b: 0.078431375, a: 1}
   unitModelPrefab: {fileID: 0}

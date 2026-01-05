@@ -86,7 +86,6 @@ public class AbilityManager : MonoBehaviour
     {
         if (GameManager.instance == null || GameManager.instance.playerBoard == null) return;
 
-        // Snapshot list to avoid modification errors
         List<CardDisplay> units = new List<CardDisplay>();
         foreach(Transform t in GameManager.instance.playerBoard) 
         {
@@ -135,7 +134,6 @@ public class AbilityManager : MonoBehaviour
         }
     }
     
-    // Legacy method for CombatManager compatibility
     public void TriggerAllyDeathAbilities(CardDisplay deadUnit, Transform board)
     {
         if (board == null) return;
@@ -170,8 +168,6 @@ public class AbilityManager : MonoBehaviour
             
             if (ally != null && ally != brokenUnit && ally.gameObject.activeInHierarchy)
             {
-                 // We manually check here because TriggerAbilities is generic
-                 // But we want to ensure the 'context' (brokenUnit) is passed if needed
                  TriggerAbilities(AbilityTrigger.OnShieldBreak, ally, board, brokenUnit);
             }
         }
@@ -187,6 +183,29 @@ public class AbilityManager : MonoBehaviour
         TriggerAbilities(AbilityTrigger.OnDealDamage, dealer, board, victim);
     }
     
+    // Triggered when a Spell Card is played
+    public void TriggerSpellCastAbilities(CardDisplay spellCard, Transform board)
+    {
+        // 1. Self Trigger
+        TriggerAbilities(AbilityTrigger.OnPlay, spellCard, board);
+
+        // 2. Board Listeners (Arcane tribe, etc.)
+        if (board == null) return;
+        foreach(Transform child in board)
+        {
+            if (child == null) continue;
+            CardDisplay ally = child.GetComponent<CardDisplay>();
+            if (ally != null && ally.gameObject.activeInHierarchy)
+            {
+                // "Whenever you cast a spell..."
+                TriggerAbilities(AbilityTrigger.OnSpellCast, ally, board, spellCard);
+                
+                // Also trigger generic "OnAnyPlay" if applicable
+                TriggerAbilities(AbilityTrigger.OnAnyPlay, ally, board, spellCard);
+            }
+        }
+    }
+
     public void TriggerAllyPlayAbilities(CardDisplay playedCard, Transform board)
     {
         if (board == null || playedCard == null) return;
@@ -201,11 +220,22 @@ public class AbilityManager : MonoBehaviour
             {
                 foreach (AbilityData ability in abilities)
                 {
-                    if (ability != null && ability.triggerType == AbilityTrigger.OnAllyPlay)
+                    if (ability != null)
                     {
-                        bool tribeMatch = ability.targetTribe == Tribe.None || (playedCard.unitData != null && ability.targetTribe == playedCard.unitData.tribe);
-                        if (tribeMatch)
+                        // Standard Synergy
+                        if (ability.triggerType == AbilityTrigger.OnAllyPlay)
                         {
+                            bool tribeMatch = ability.targetTribe == Tribe.None || (playedCard.unitData != null && ability.targetTribe == playedCard.unitData.tribe);
+                            if (tribeMatch)
+                            {
+                                ExecuteAbility(ability, ally, playedCard, board);
+                            }
+                        }
+                        
+                        // Global "On Any Play" Synergy
+                        if (ability.triggerType == AbilityTrigger.OnAnyPlay)
+                        {
+                            // This fires for ANY unit played, tribe checks handled in execution or conditions if needed
                             ExecuteAbility(ability, ally, playedCard, board);
                         }
                     }
@@ -214,7 +244,7 @@ public class AbilityManager : MonoBehaviour
         }
     }
     
-    // NEW: Handle "On Summon" triggers (Tokens + Played Cards)
+    // Handle "On Summon" triggers (Tokens + Played Cards)
     public void TriggerAllySummonAbilities(CardDisplay summonedUnit, Transform board)
     {
         if (board == null || summonedUnit == null) return;
@@ -222,10 +252,9 @@ public class AbilityManager : MonoBehaviour
         // 1. Self Trigger (OnSpawn)
         TriggerAbilities(AbilityTrigger.OnSpawn, summonedUnit, board);
 
-        // 2. Native Rush Handling (The Checkbox!)
-        if (summonedUnit.hasRush || (summonedUnit.unitData != null && summonedUnit.unitData.hasRush)) // Fallback if CardDisplay hasn't init yet
+        // 2. Native Rush Handling
+        if (summonedUnit.hasRush || (summonedUnit.unitData != null && summonedUnit.unitData.hasRush)) 
         {
-            // Only perform Rush attacks if we are in the Combat Phase
             if (GameManager.instance != null && GameManager.instance.currentPhase == GameManager.GamePhase.Combat)
             {
                 PerformImmediateAttack(summonedUnit);
@@ -242,19 +271,22 @@ public class AbilityManager : MonoBehaviour
             // Basic validity checks
             if (ally == null || ally == summonedUnit || !ally.gameObject.activeInHierarchy) continue;
 
-            // Use Runtime Abilities list
             List<AbilityData> abilities = ally.runtimeAbilities ?? ally.unitData.abilities;
             if (abilities != null)
             {
                 foreach (AbilityData ability in abilities)
                 {
-                    if (ability != null && ability.triggerType == AbilityTrigger.OnAllySummon)
+                    if (ability != null) 
                     {
-                        // Check Tribe Condition
-                        bool tribeMatch = ability.targetTribe == Tribe.None || 
-                                         (summonedUnit.unitData != null && ability.targetTribe == summonedUnit.unitData.tribe);
+                        if (ability.triggerType == AbilityTrigger.OnAllySummon)
+                        {
+                            bool tribeMatch = ability.targetTribe == Tribe.None || 
+                                             (summonedUnit.unitData != null && ability.targetTribe == summonedUnit.unitData.tribe);
+                            
+                            if (tribeMatch) ExecuteAbility(ability, ally, summonedUnit, board);
+                        }
                         
-                        if (tribeMatch)
+                        if (ability.triggerType == AbilityTrigger.OnAnySummon)
                         {
                             ExecuteAbility(ability, ally, summonedUnit, board);
                         }
@@ -323,12 +355,11 @@ public class AbilityManager : MonoBehaviour
 
         List<CardDisplay> targets = FindTargets(ability, source, interactionTarget, overrideBoard);
 
-        // Special Logic: Targeted but no targets found? 
         bool isGlobalEffect = ability.effectType == AbilityEffect.SummonUnit || 
                               ability.effectType == AbilityEffect.HealHero || 
                               ability.effectType == AbilityEffect.ReduceUpgradeCost || 
                               ability.effectType == AbilityEffect.GainGold ||
-                              ability.effectType == AbilityEffect.ImmediateAttack; // ImmediateAttack handles targeting internally
+                              ability.effectType == AbilityEffect.ImmediateAttack; 
 
         if (targets.Count == 0 && isGlobalEffect)
         {
@@ -461,6 +492,7 @@ public class AbilityManager : MonoBehaviour
                     if (source.hasVenomous) target.GainKeyword(KeywordType.Venomous, true);
                     if (source.hasTaunt) target.GainKeyword(KeywordType.Taunt, true);
                     if (source.hasStealth) target.GainKeyword(KeywordType.Stealth, true);
+                    if (source.hasRush) target.GainKeyword(KeywordType.Rush, true);
 
                     if (source.runtimeAbilities != null)
                     {
@@ -496,6 +528,61 @@ public class AbilityManager : MonoBehaviour
                     PerformImmediateAttack(source);
                 }
                 break;
+                
+            case AbilityEffect.Consume:
+                if (target != null && source != null && target != source)
+                {
+                    int eatenAtk = target.currentAttack;
+                    int eatenHp = target.currentHealth;
+
+                    if (isSourceGolden)
+                    {
+                        eatenAtk *= 2;
+                        eatenHp *= 2;
+                    }
+
+                    source.permanentAttack += eatenAtk;
+                    source.permanentHealth += eatenHp;
+                    source.currentAttack += eatenAtk;
+                    source.currentHealth += eatenHp;
+
+                    // Steal Keywords & Abilities based on settings
+                    bool stealAbilities = ability.consumeAbsorbsAbilities;
+                    if (isSourceGolden && ability.consumeAbsorbsAbilitiesIfGolden) stealAbilities = true;
+
+                    if (stealAbilities)
+                    {
+                        bool isPerm = ability.duration == BuffDuration.Permanent;
+                        if (target.hasDivineShield) source.GainKeyword(KeywordType.DivineShield, isPerm);
+                        if (target.hasReborn) source.GainKeyword(KeywordType.Reborn, isPerm);
+                        if (target.hasPoison) source.GainKeyword(KeywordType.Poison, isPerm);
+                        if (target.hasVenomous) source.GainKeyword(KeywordType.Venomous, isPerm);
+                        if (target.hasTaunt) source.GainKeyword(KeywordType.Taunt, isPerm);
+                        if (target.hasStealth) source.GainKeyword(KeywordType.Stealth, isPerm);
+                        if (target.hasRush) source.GainKeyword(KeywordType.Rush, isPerm);
+
+                        if (target.runtimeAbilities != null)
+                        {
+                            foreach(var ab in target.runtimeAbilities)
+                            {
+                                if (ab.effectType != AbilityEffect.Consume && ab.effectType != AbilityEffect.Magnetize) 
+                                    source.AddAbility(ab);
+                            }
+                        }
+                    }
+
+                    source.UpdateVisuals();
+                    Destroy(target.gameObject);
+                    RecalculateAuras();
+                }
+                break;
+                
+            case AbilityEffect.Counter:
+                // Placeholder for Counterspell logic.
+                // In a full implementation, we'd add a "Countered" status to the target
+                // or register this unit as a listener to cancel the next event.
+                Debug.Log($"Counter effect triggered by {source.name} on {target.name}");
+                break;
         }
 
         if (ability.chainedAbility != null)
@@ -504,11 +591,8 @@ public class AbilityManager : MonoBehaviour
         }
     }
 
-    // --- NEW: Helper for Immediate Attacks (Rush) ---
     void PerformImmediateAttack(CardDisplay source)
     {
-        // Find a target (usually RandomEnemy)
-        // Check which board this unit is on to determine enemies
         Transform enemyBoard = null;
         if (GameManager.instance != null && CombatManager.instance != null)
         {
@@ -528,22 +612,16 @@ public class AbilityManager : MonoBehaviour
         
         if (enemies.Count > 0)
         {
-            // Prioritize Taunt
             List<CardDisplay> taunts = enemies.Where(e => e.hasTaunt).ToList();
             CardDisplay targetUnit = (taunts.Count > 0) ? taunts[Random.Range(0, taunts.Count)] : enemies[Random.Range(0, enemies.Count)];
             
             Debug.Log($"{source.unitData.unitName} performs Immediate Attack/Rush on {targetUnit.unitData.unitName}!");
 
-            // Simulate Attack: Deal Damage
             int dmg = source.currentAttack;
             targetUnit.TakeDamage(dmg);
-            
-            // Take Damage Back (It's a trade)
             source.TakeDamage(targetUnit.currentAttack);
         }
     }
-
-    // --- HELPERS ---
 
     int CalculateScaling(AbilityData ability, CardDisplay source, Transform board)
     {
@@ -600,13 +678,12 @@ public class AbilityManager : MonoBehaviour
             if(cd != null && cd.gameObject.activeInHierarchy) allies.Add(cd);
         }
 
-        // Add source if on board but not in list yet (edge case)
         if (source != null && !allies.Contains(source) && source.transform.parent == board)
         {
             allies.Add(source);
         }
         
-        // For Global Targets
+        // Global Lists
         List<CardDisplay> allUnitsInGame = new List<CardDisplay>();
         if (ability.targetType == AbilityTarget.GlobalTribe || ability.targetType == AbilityTarget.GlobalCopies)
         {
@@ -624,26 +701,30 @@ public class AbilityManager : MonoBehaviour
                 if (validRandom.Count > 0) targets.Add(validRandom[Random.Range(0, validRandom.Count)]);
                 break;
             case AbilityTarget.AllFriendly: targets.AddRange(allies); break;
+            
             case AbilityTarget.AdjacentFriendly:
+            {
                 if (source == null) break;
                 int index = allies.IndexOf(source);
                 if (index > 0) targets.Add(allies[index - 1]); 
                 if (index >= 0 && index < allies.Count - 1) targets.Add(allies[index + 1]); 
                 break;
+            }
             case AbilityTarget.AdjacentLeft:
-                if (source != null) 
-                {
-                    int index = allies.IndexOf(source);
-                    if (index > 0) targets.Add(allies[index - 1]); // Left Neighbor
-                }
+            {
+                if (source == null) break;
+                int index = allies.IndexOf(source);
+                if (index > 0) targets.Add(allies[index - 1]);
                 break;
+            }
             case AbilityTarget.AdjacentRight:
-                if (source != null) 
-                {
-                    int index = allies.IndexOf(source);
-                    if (index >= 0 && index < allies.Count - 1) targets.Add(allies[index + 1]); // Right Neighbor
-                }
+            {
+                if (source == null) break;
+                int index = allies.IndexOf(source);
+                if (index >= 0 && index < allies.Count - 1) targets.Add(allies[index + 1]);
                 break;
+            }
+
             case AbilityTarget.AllFriendlyTribe:
                 foreach(var ally in allies) if (ally.unitData.tribe == ability.targetTribe) targets.Add(ally);
                 break;
@@ -656,6 +737,63 @@ public class AbilityManager : MonoBehaviour
             case AbilityTarget.Killer:
             case AbilityTarget.Opponent:
                 if (interactionTarget != null) targets.Add(interactionTarget);
+                break;
+            
+            case AbilityTarget.OpposingUnit:
+                if (source != null && source.transform.parent != null)
+                {
+                    Transform myBoard = source.transform.parent;
+                    Transform otherBoard = null;
+                    
+                    if (GameManager.instance != null && myBoard == GameManager.instance.playerBoard)
+                        otherBoard = CombatManager.instance != null ? CombatManager.instance.enemyBoard : null;
+                    else if (CombatManager.instance != null && myBoard == CombatManager.instance.enemyBoard)
+                        otherBoard = GameManager.instance.playerBoard;
+                        
+                    if (otherBoard != null)
+                    {
+                        int index = source.transform.GetSiblingIndex();
+                        if (index < otherBoard.childCount)
+                        {
+                            CardDisplay opp = otherBoard.GetChild(index).GetComponent<CardDisplay>();
+                            if (opp != null && opp.gameObject.activeInHierarchy) targets.Add(opp);
+                        }
+                    }
+                }
+                break;
+
+            case AbilityTarget.AllInHand:
+                if (GameManager.instance != null && GameManager.instance.playerHand != null)
+                {
+                    foreach(Transform child in GameManager.instance.playerHand)
+                    {
+                        CardDisplay cd = child.GetComponent<CardDisplay>();
+                        if (cd != null && cd.gameObject.activeInHierarchy) targets.Add(cd);
+                    }
+                }
+                break;
+
+            case AbilityTarget.AllInShop:
+                if (ShopManager.instance != null && ShopManager.instance.shopContainer != null)
+                {
+                    foreach(Transform child in ShopManager.instance.shopContainer)
+                    {
+                        CardDisplay cd = child.GetComponent<CardDisplay>();
+                        if (cd != null && cd.gameObject.activeInHierarchy) targets.Add(cd);
+                    }
+                }
+                break;
+                
+            case AbilityTarget.AllFriendlyEverywhere:
+                targets.AddRange(allies);
+                if (GameManager.instance != null && GameManager.instance.playerHand != null)
+                {
+                    foreach(Transform child in GameManager.instance.playerHand)
+                    {
+                        CardDisplay cd = child.GetComponent<CardDisplay>();
+                        if (cd != null && cd.gameObject.activeInHierarchy) targets.Add(cd);
+                    }
+                }
                 break;
                 
             case AbilityTarget.GlobalTribe:
