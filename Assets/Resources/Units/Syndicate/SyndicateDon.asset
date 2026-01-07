@@ -15,6 +15,7 @@ MonoBehaviour:
   id: 
   unitName: Syndicate Don
   description: 
+  cardType: 0
   tier: 5
   cost: 3
   baseAttack: 6
@@ -26,9 +27,10 @@ MonoBehaviour:
   hasStealth: 0
   hasPoison: 0
   hasVenomous: 0
+  hasRush: 0
   abilities:
   - {fileID: 11400000, guid: f50991095d6a2c54c9b1924041b33df6, type: 2}
-  artwork: {fileID: 10913, guid: 0000000000000000f000000000000000, type: 0}
+  artwork: {fileID: -1173549765, guid: ec16f42703156fe48b299a47d9e87fe2, type: 3}
   frameColor: {r: 0, g: 1, b: 1, a: 1}
   unitModelPrefab: {fileID: 0}
   attackProjectilePrefab: {fileID: 0}

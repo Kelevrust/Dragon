@@ -46,7 +46,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     public bool hasStealth;
     public bool hasPoison;
     public bool hasVenomous;
-    public bool hasRush; // NEW
+    public bool hasRush; 
 
     [Header("Permanent Keywords (Base State)")]
     public bool permDivineShield;
@@ -55,7 +55,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     public bool permStealth;
     public bool permPoison;
     public bool permVenomous;
-    public bool permRush; // NEW
+    public bool permRush; 
 
     private Color originalAttackColor = Color.black; 
     private Color originalHealthColor = Color.black;
@@ -116,8 +116,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         permStealth = data.hasStealth;
         permPoison = data.hasPoison;
         permVenomous = data.hasVenomous;
-        // Need to add hasRush to UnitData eventually, defaulting false here
-        permRush = false; 
+        // permRush will default false if not in data, or update data first
 
         damageTaken = 0;
         ResetToPermanent();
@@ -311,7 +310,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
                     case AbilityTrigger.OnAllySummon: sb.Append("<b>On Summon:</b> "); break;
                     case AbilityTrigger.OnEnemyDeath: sb.Append("<b>On Kill (Witness):</b> "); break;
                     case AbilityTrigger.OnAnyDeath: sb.Append("<b>On Any Death:</b> "); break;
-                    case AbilityTrigger.OnSpawn: sb.Append("<b>On Spawn:</b> "); break; // NEW
+                    case AbilityTrigger.OnSpawn: sb.Append("<b>On Spawn:</b> "); break; 
                 }
 
                 switch (ability.effectType)
@@ -439,6 +438,9 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         if (canvasTransform != null) transform.SetParent(canvasTransform);
         canvasGroup.blocksRaycasts = false;
         
+        // NEW: Toggle Sell Zone
+        if (GameManager.instance != null) GameManager.instance.ToggleSellZone(true);
+
         if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
     }
 
@@ -468,6 +470,9 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     {
         canvasGroup.blocksRaycasts = true;
         transform.DOScale(1f, 0.2f);
+        
+        // NEW: Toggle Sell Zone
+        if (GameManager.instance != null) GameManager.instance.ToggleSellZone(false);
 
         if (GameManager.instance.currentPhase != GameManager.GamePhase.Recruit || GameManager.instance.isUnconscious) 
         {

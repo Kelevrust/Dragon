@@ -65,6 +65,7 @@ public class GameManager : MonoBehaviour
     [Header("Selection")]
     public CardDisplay selectedUnit; 
     public GameObject sellButton; 
+    public GameObject sellZone; // NEW: Reference to the large drop area
 
     [Header("In-Game Menu")]
     public GameObject pauseMenuPanel; 
@@ -87,12 +88,14 @@ public class GameManager : MonoBehaviour
         if (pauseMenuPanel != null) pauseMenuPanel.SetActive(false);
         
         if (bankPanel != null) bankPanel.SetActive(enableGoldCarryover);
+        
+        // Ensure Sell Zone starts hidden so it doesn't block clicks
+        if (sellZone != null) sellZone.SetActive(false);
 
         string playerType = "Human";
         string logDetails = "";
 
         GameTester tester = FindFirstObjectByType<GameTester>();
-        // Only tag as AI if AutoPlay is actually ON
         if (tester != null && tester.isAutoPlaying)
         {
             playerType = "AI";
@@ -290,7 +293,7 @@ public class GameManager : MonoBehaviour
             gold += activeHero.bonusValue;
         }
 
-        // NEW: Trigger Start of Turn effects (e.g. Loan Shark)
+        // Trigger Start of Turn effects
         if (AbilityManager.instance != null)
         {
             AbilityManager.instance.TriggerTurnStartAbilities();
@@ -344,6 +347,15 @@ public class GameManager : MonoBehaviour
             gold += amount;
             LogAction($"Withdrew {amount} gold. Bank Balance: {bankBalance}");
             UpdateUI();
+        }
+    }
+    
+    // --- NEW: Toggle Sell Zone State ---
+    public void ToggleSellZone(bool active)
+    {
+        if (sellZone != null)
+        {
+            sellZone.SetActive(active);
         }
     }
 
@@ -735,28 +747,35 @@ public class GameManager : MonoBehaviour
         if (leaderboard != null) leaderboard.UpdateDisplay();
     }
     
+    // --- RESTORED: Clean up floating cards ---
     public void CleanUpFloatingCards()
     {
         CardDisplay[] allCards = FindObjectsByType<CardDisplay>(FindObjectsSortMode.None);
         foreach(var card in allCards)
         {
+            // If card is active, but not in a valid container
             if (card.gameObject.activeInHierarchy && 
                 card.transform.parent != playerBoard && 
                 card.transform.parent != playerHand && 
                 (combatManager == null || card.transform.parent != combatManager.shopContainer))
             {
+                // Is it currently being dragged by the user? (Check if parent is Canvas)
+                // We assume any child of Canvas that is a Card is "floating"
                 if (card.GetComponentInParent<Canvas>() != null && card.transform.parent.GetComponent<Canvas>() != null)
                 {
                     Debug.Log($"Cleaning up floating card: {card.name}");
                     
                     if (card.isPurchased)
                     {
+                        // Safely return to hand
                         card.transform.SetParent(playerHand);
                         card.transform.localPosition = Vector3.zero;
+                        // Reset scaling from drag
                         card.transform.localScale = Vector3.one;
                     }
                     else
                     {
+                        // Destroy shop item
                         Destroy(card.gameObject);
                     }
                 }

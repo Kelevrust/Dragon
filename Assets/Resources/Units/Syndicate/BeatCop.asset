@@ -15,17 +15,25 @@ MonoBehaviour:
   id: 
   unitName: Beat Cop
   description: 
+  cardType: 0
   tier: 2
   cost: 3
   baseAttack: 3
   baseHealth: 3
+  tribe: 1
   hasTaunt: 0
   hasDivineShield: 0
   hasReborn: 0
-  tribe: 1
+  hasStealth: 0
+  hasPoison: 0
+  hasVenomous: 0
+  hasRush: 0
   abilities:
   - {fileID: 0}
-  artwork: {fileID: 10913, guid: 0000000000000000f000000000000000, type: 0}
+  artwork: {fileID: -1709759659, guid: c32c55e05c7012848af5557e5a8ce28f, type: 3}
   frameColor: {r: 0, g: 1, b: 1, a: 1}
   unitModelPrefab: {fileID: 0}
   attackProjectilePrefab: {fileID: 0}
+  attackSound: {fileID: 0}
+  deathSound: {fileID: 0}
+  transformationUnit: {fileID: 0}

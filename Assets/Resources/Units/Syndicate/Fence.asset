@@ -15,6 +15,7 @@ MonoBehaviour:
   id: 
   unitName: Fence
   description: 
+  cardType: 0
   tier: 3
   cost: 3
   baseAttack: 3
@@ -26,9 +27,10 @@ MonoBehaviour:
   hasStealth: 0
   hasPoison: 0
   hasVenomous: 0
+  hasRush: 0
   abilities:
   - {fileID: 11400000, guid: 167061eae8627db4887258fe59a673f9, type: 2}
-  artwork: {fileID: 10913, guid: 0000000000000000f000000000000000, type: 0}
+  artwork: {fileID: -1719171324, guid: 1a3a4c7508b15f74e861b56fc0ab12cd, type: 3}
   frameColor: {r: 0, g: 1, b: 1, a: 1}
   unitModelPrefab: {fileID: 0}
   attackProjectilePrefab: {fileID: 0}

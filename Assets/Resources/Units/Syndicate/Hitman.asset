@@ -15,6 +15,7 @@ MonoBehaviour:
   id: 
   unitName: Hitman
   description: 
+  cardType: 0
   tier: 4
   cost: 3
   baseAttack: 5
@@ -26,9 +27,10 @@ MonoBehaviour:
   hasStealth: 0
   hasPoison: 0
   hasVenomous: 0
+  hasRush: 0
   abilities:
   - {fileID: 11400000, guid: 968cdc24c178d024286b7f3e705b90d2, type: 2}
-  artwork: {fileID: 10913, guid: 0000000000000000f000000000000000, type: 0}
+  artwork: {fileID: -687365815, guid: 4a471070e9eda9b49a155fc8365a7c7d, type: 3}
   frameColor: {r: 0, g: 1, b: 1, a: 1}
   unitModelPrefab: {fileID: 0}
   attackProjectilePrefab: {fileID: 0}
