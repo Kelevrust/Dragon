@@ -311,6 +311,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
                     case AbilityTrigger.OnEnemyDeath: sb.Append("<b>On Kill (Witness):</b> "); break;
                     case AbilityTrigger.OnAnyDeath: sb.Append("<b>On Any Death:</b> "); break;
                     case AbilityTrigger.OnSpawn: sb.Append("<b>On Spawn:</b> "); break; 
+                    case AbilityTrigger.OnSpellCast: sb.Append("<b>Spellburst:</b> "); break; // NEW
                 }
 
                 switch (ability.effectType)
@@ -377,6 +378,14 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
                     case AbilityEffect.ImmediateAttack:
                         sb.Append("Attack immediately.");
                         break;
+                        
+                    case AbilityEffect.Consume:
+                        sb.Append($"Consume {GetTargetString(ability.targetType)} to gain its stats.");
+                        break;
+                        
+                    case AbilityEffect.Counter:
+                        sb.Append($"Counter the next {ability.metaTriggerType} on {GetTargetString(ability.targetType)}.");
+                        break;
                 }
                 sb.Append("\n");
             }
@@ -398,6 +407,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
             case AbilityTarget.Opponent: return "enemy";
             case AbilityTarget.AllEnemy: return "all enemies";
             case AbilityTarget.RandomEnemy: return "random enemy";
+            case AbilityTarget.OpposingUnit: return "enemy opposite"; // NEW
             default: return "target";
         }
     }
@@ -438,7 +448,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         if (canvasTransform != null) transform.SetParent(canvasTransform);
         canvasGroup.blocksRaycasts = false;
         
-        // NEW: Toggle Sell Zone
+        // Toggle Sell Zone
         if (GameManager.instance != null) GameManager.instance.ToggleSellZone(true);
 
         if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
@@ -471,7 +481,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         canvasGroup.blocksRaycasts = true;
         transform.DOScale(1f, 0.2f);
         
-        // NEW: Toggle Sell Zone
+        // Toggle Sell Zone
         if (GameManager.instance != null) GameManager.instance.ToggleSellZone(false);
 
         if (GameManager.instance.currentPhase != GameManager.GamePhase.Recruit || GameManager.instance.isUnconscious) 

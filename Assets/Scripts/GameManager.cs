@@ -293,7 +293,7 @@ public class GameManager : MonoBehaviour
             gold += activeHero.bonusValue;
         }
 
-        // Trigger Start of Turn effects
+        // NEW: Trigger Start of Turn effects (e.g. Loan Shark)
         if (AbilityManager.instance != null)
         {
             AbilityManager.instance.TriggerTurnStartAbilities();
@@ -789,6 +789,7 @@ public class GameManager : MonoBehaviour
         {
             if (enableGoldCarryover)
             {
+                // FIX: Gold shows clean number (Gold: 10)
                 goldText.text = $"Gold: {gold}";
             }
             else
@@ -799,6 +800,7 @@ public class GameManager : MonoBehaviour
         
         if (bankBalanceText != null)
         {
+            // FIX: Bank shows "Bank: X (+Interest)"
             string interestText = "";
             if (enableInterest && enableGoldCarryover)
             {
