@@ -15,6 +15,7 @@ MonoBehaviour:
   id: 
   unitName: Smuggler
   description: 
+  cardType: 0
   tier: 3
   cost: 3
   baseAttack: 4
@@ -26,9 +27,10 @@ MonoBehaviour:
   hasStealth: 1
   hasPoison: 0
   hasVenomous: 0
+  hasRush: 0
   abilities:
   - {fileID: 11400000, guid: 485aaa57bea906f48a303bfc79a32ddc, type: 2}
-  artwork: {fileID: 10913, guid: 0000000000000000f000000000000000, type: 0}
+  artwork: {fileID: 1069628574, guid: 3f2a705df25e2bd44a819c473acd02ba, type: 3}
   frameColor: {r: 0, g: 1, b: 1, a: 1}
   unitModelPrefab: {fileID: 0}
   attackProjectilePrefab: {fileID: 0}

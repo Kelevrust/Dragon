@@ -65,7 +65,7 @@ public class GameManager : MonoBehaviour
     [Header("Selection")]
     public CardDisplay selectedUnit; 
     public GameObject sellButton; 
-    public GameObject sellZone; // NEW: Reference to the large drop area
+    public GameObject sellZone; // Reference to the large drop area
 
     [Header("In-Game Menu")]
     public GameObject pauseMenuPanel; 
@@ -787,6 +787,7 @@ public class GameManager : MonoBehaviour
     {
         if (goldText != null)
         {
+            // If in Carryover mode, show total gold. Otherwise show X/Max
             if (enableGoldCarryover)
             {
                 // FIX: Gold shows clean number (Gold: 10)

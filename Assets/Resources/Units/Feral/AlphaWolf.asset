@@ -15,17 +15,25 @@ MonoBehaviour:
   id: 
   unitName: Alpha Wolf
   description: 
+  cardType: 0
   tier: 1
   cost: 3
   baseAttack: 3
   baseHealth: 3
+  tribe: 3
   hasTaunt: 0
   hasDivineShield: 0
   hasReborn: 0
-  tribe: 3
+  hasStealth: 0
+  hasPoison: 0
+  hasVenomous: 0
+  hasRush: 0
   abilities:
   - {fileID: 11400000, guid: ebe0cdee7e8f14b45a2b8e66fd91b8be, type: 2}
-  artwork: {fileID: 10913, guid: 0000000000000000f000000000000000, type: 0}
+  artwork: {fileID: 150493555, guid: 7a127e2c08eedd548ae4f288d0c28e6d, type: 3}
   frameColor: {r: 1, g: 0.7490196, b: 0, a: 1}
   unitModelPrefab: {fileID: 0}
   attackProjectilePrefab: {fileID: 0}
+  attackSound: {fileID: 0}
+  deathSound: {fileID: 0}
+  transformationUnit: {fileID: 0}

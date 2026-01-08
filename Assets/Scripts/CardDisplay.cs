@@ -128,7 +128,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         currentAttack = permanentAttack;
         currentHealth = permanentHealth - damageTaken;
 
-        // Reset Keywords to their permanent state (removes temporary combat buffs)
+        // Reset Keywords to their permanent state
         hasDivineShield = permDivineShield;
         hasReborn = permReborn;
         hasTaunt = permTaunt;
@@ -232,7 +232,17 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
 
         if (descriptionText != null) descriptionText.text = unitData.description;
         if (mechanicsText != null) mechanicsText.text = GenerateMechanicsText();
-        if (artworkImage != null) artworkImage.sprite = unitData.artwork;
+        
+        // --- SPRITE FIX ---
+        if (artworkImage != null)
+        {
+            if (unitData.artwork != null) 
+            {
+                artworkImage.sprite = unitData.artwork;
+                artworkImage.gameObject.SetActive(true); // Force show
+            }
+        }
+        
         if (tribeText != null) tribeText.text = unitData.tribe.ToString(); 
 
         bool hasTribe = unitData.tribe != Tribe.None;
@@ -275,7 +285,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     {
         StringBuilder sb = new StringBuilder();
 
-        // Use Runtime flags instead of static Data
+        // Check ALL keywords
         if (hasTaunt) sb.Append("<b>Taunt</b>. ");
         if (hasDivineShield) sb.Append("<b>Divine Shield</b>. "); 
         if (hasReborn) sb.Append("<b>Reborn</b>. "); 
@@ -311,7 +321,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
                     case AbilityTrigger.OnEnemyDeath: sb.Append("<b>On Kill (Witness):</b> "); break;
                     case AbilityTrigger.OnAnyDeath: sb.Append("<b>On Any Death:</b> "); break;
                     case AbilityTrigger.OnSpawn: sb.Append("<b>On Spawn:</b> "); break; 
-                    case AbilityTrigger.OnSpellCast: sb.Append("<b>Spellburst:</b> "); break; // NEW
+                    case AbilityTrigger.OnSpellCast: sb.Append("<b>Spellburst:</b> "); break;
                 }
 
                 switch (ability.effectType)
@@ -407,7 +417,6 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
             case AbilityTarget.Opponent: return "enemy";
             case AbilityTarget.AllEnemy: return "all enemies";
             case AbilityTarget.RandomEnemy: return "random enemy";
-            case AbilityTarget.OpposingUnit: return "enemy opposite"; // NEW
             default: return "target";
         }
     }
@@ -448,7 +457,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         if (canvasTransform != null) transform.SetParent(canvasTransform);
         canvasGroup.blocksRaycasts = false;
         
-        // Toggle Sell Zone
+        // NEW: Toggle Sell Zone
         if (GameManager.instance != null) GameManager.instance.ToggleSellZone(true);
 
         if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
@@ -481,7 +490,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         canvasGroup.blocksRaycasts = true;
         transform.DOScale(1f, 0.2f);
         
-        // Toggle Sell Zone
+        // NEW: Toggle Sell Zone
         if (GameManager.instance != null) GameManager.instance.ToggleSellZone(false);
 
         if (GameManager.instance.currentPhase != GameManager.GamePhase.Recruit || GameManager.instance.isUnconscious) 

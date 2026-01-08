@@ -29,7 +29,7 @@ MonoBehaviour:
   hasVenomous: 0
   hasRush: 0
   abilities: []
-  artwork: {fileID: 10913, guid: 0000000000000000f000000000000000, type: 0}
+  artwork: {fileID: -171745864, guid: 4d453db83e4cd2f46bd6d120ff759f0b, type: 3}
   frameColor: {r: 1, g: 0, b: 1, a: 1}
   unitModelPrefab: {fileID: 0}
   attackProjectilePrefab: {fileID: 0}

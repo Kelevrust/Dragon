@@ -27,9 +27,10 @@ MonoBehaviour:
   hasStealth: 0
   hasPoison: 0
   hasVenomous: 0
+  hasRush: 0
   abilities:
   - {fileID: 11400000, guid: 9fe46dfeb0231734ca5379f825eb45f4, type: 2}
-  artwork: {fileID: 10913, guid: 0000000000000000f000000000000000, type: 0}
+  artwork: {fileID: -872044592, guid: f4677b5eaf47d2b43857c9164267e6b7, type: 3}
   frameColor: {r: 1, g: 0.7490196, b: 0, a: 1}
   unitModelPrefab: {fileID: 0}
   attackProjectilePrefab: {fileID: 0}

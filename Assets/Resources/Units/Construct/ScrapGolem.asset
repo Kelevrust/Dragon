@@ -31,7 +31,7 @@ MonoBehaviour:
   abilities:
   - {fileID: 11400000, guid: 46271483129b1284a88668b6f2398421, type: 2}
   - {fileID: 11400000, guid: beb543b80f68da6449ad4f22b7da0636, type: 2}
-  artwork: {fileID: 10913, guid: 0000000000000000f000000000000000, type: 0}
+  artwork: {fileID: -9889731, guid: a4320349b0e4f6f4e8c1b914bd6cd38b, type: 3}
   frameColor: {r: 1, g: 0, b: 1, a: 1}
   unitModelPrefab: {fileID: 0}
   attackProjectilePrefab: {fileID: 0}

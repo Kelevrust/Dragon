@@ -13,8 +13,9 @@ MonoBehaviour:
   m_Name: AlleyCat_Token
   m_EditorClassIdentifier: Assembly-CSharp::UnitData
   id: 
-  unitName: Alley Cat
+  unitName: Alley Kitten
   description: 
+  cardType: 0
   tier: 1
   cost: 3
   baseAttack: 1
@@ -26,9 +27,10 @@ MonoBehaviour:
   hasStealth: 0
   hasPoison: 0
   hasVenomous: 0
+  hasRush: 0
   abilities:
   - {fileID: 0}
-  artwork: {fileID: 10913, guid: 0000000000000000f000000000000000, type: 0}
+  artwork: {fileID: 376531430, guid: e380c27f311ed4341b3bd681902432ef, type: 3}
   frameColor: {r: 1, g: 0.7490196, b: 0, a: 1}
   unitModelPrefab: {fileID: 0}
   attackProjectilePrefab: {fileID: 0}

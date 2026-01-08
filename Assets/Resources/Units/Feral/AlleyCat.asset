@@ -15,6 +15,7 @@ MonoBehaviour:
   id: 
   unitName: Alley Cat
   description: 
+  cardType: 0
   tier: 1
   cost: 3
   baseAttack: 1
@@ -26,9 +27,10 @@ MonoBehaviour:
   hasStealth: 0
   hasPoison: 0
   hasVenomous: 0
+  hasRush: 0
   abilities:
   - {fileID: 11400000, guid: 8b2abb6be172fb145a544cc79f2ea776, type: 2}
-  artwork: {fileID: 10913, guid: 0000000000000000f000000000000000, type: 0}
+  artwork: {fileID: 1505055813, guid: e7fb8aad1c015fb46b78225f857a6194, type: 3}
   frameColor: {r: 1, g: 0.7490196, b: 0, a: 1}
   unitModelPrefab: {fileID: 0}
   attackProjectilePrefab: {fileID: 0}

@@ -487,7 +487,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: -865, y: 25}
+  m_AnchoredPosition: {x: -864.9999, y: 25}
   m_SizeDelta: {x: -1723.9, y: -131.734}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &46730723
@@ -1186,8 +1186,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -17.929, y: 398.3163}
-  m_SizeDelta: {x: 1219.645, y: 283.369}
+  m_AnchoredPosition: {x: -0.0000019073, y: 413.32}
+  m_SizeDelta: {x: 1219.645, y: 253.37}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &217183225
 MonoBehaviour:
@@ -3249,21 +3249,35 @@ MonoBehaviour:
   normalString: FREEZE
   upgradeButtonText: {fileID: 1504816364}
   availableUnits:
-  - {fileID: 11400000, guid: b811d28a4f5da1f4db56a25cc8b385ac, type: 2}
-  - {fileID: 11400000, guid: 243d02741ee76c74db14de5305654085, type: 2}
-  - {fileID: 11400000, guid: d9ca7f3f33b6a6540a34b210a94ef866, type: 2}
-  - {fileID: 11400000, guid: 08a8f06da2baf484ebfcf34170fc07e0, type: 2}
-  - {fileID: 11400000, guid: aef54ce7436fc4c46876a57bf5facd3d, type: 2}
-  - {fileID: 11400000, guid: 2ec1a4bf84adc6e47a98261bc015760f, type: 2}
+  - {fileID: 11400000, guid: a374abe542e4b974eb8ce1a13152b712, type: 2}
   - {fileID: 11400000, guid: 5d198473ace760c478a1ca67d469399e, type: 2}
-  - {fileID: 11400000, guid: 071120a2d90b15946b84f4e7eb1dd4be, type: 2}
-  - {fileID: 11400000, guid: b0368696478d4024d964348e3fe24d82, type: 2}
-  - {fileID: 11400000, guid: 6856424ad56238843861d8439b8fcced, type: 2}
-  - {fileID: 11400000, guid: 1a0ec2ecc52170b43b4e37872d57d50f, type: 2}
-  - {fileID: 11400000, guid: 90c05aa9f4611ab4588f4064a3dc5824, type: 2}
+  - {fileID: 11400000, guid: 6d1652e535bb2484cb6ccbfdf6e7e81a, type: 2}
+  - {fileID: 11400000, guid: a3b2a81087b4d49508dfd78ce1dfcfd2, type: 2}
+  - {fileID: 11400000, guid: 1562be6e9c84b497bb906704ff35dd09, type: 2}
+  - {fileID: 11400000, guid: 20eb5690c88f042419bef49ef66ee182, type: 2}
   - {fileID: 11400000, guid: 95c85b47ce0a7834ea1005f3b3e7edcb, type: 2}
-  - {fileID: 11400000, guid: 229ae63e945c34b4c80c532317f6858c, type: 2}
+  - {fileID: 11400000, guid: a382b51f278294dc8931e881de63111b, type: 2}
+  - {fileID: 11400000, guid: d0a41c5a4a2e3458fb3db81689e98286, type: 2}
   - {fileID: 11400000, guid: 6f5e3a28757e3f747910d28a5d2169cb, type: 2}
+  - {fileID: 11400000, guid: 2da0b396491a5dc4f8e7bba18bba46e7, type: 2}
+  - {fileID: 11400000, guid: b811d28a4f5da1f4db56a25cc8b385ac, type: 2}
+  - {fileID: 11400000, guid: 08a8f06da2baf484ebfcf34170fc07e0, type: 2}
+  - {fileID: 11400000, guid: 79b37b23150a71f44b14ceed6942f9d0, type: 2}
+  - {fileID: 11400000, guid: d9ca7f3f33b6a6540a34b210a94ef866, type: 2}
+  - {fileID: 11400000, guid: c54e2f2cf4d887b4cbc101d746d79681, type: 2}
+  - {fileID: 11400000, guid: 8884e1f74aeadfb4c93b782f6a4abf99, type: 2}
+  - {fileID: 11400000, guid: 2e7fd15b9deaa3b4eb416765a8600aef, type: 2}
+  - {fileID: 11400000, guid: 1a0ec2ecc52170b43b4e37872d57d50f, type: 2}
+  - {fileID: 11400000, guid: 229ae63e945c34b4c80c532317f6858c, type: 2}
+  - {fileID: 11400000, guid: 4e12fd4e1a85da14bbdba1d29bbb4888, type: 2}
+  - {fileID: 11400000, guid: b9a60e2482965304da5b3efa25538d9a, type: 2}
+  - {fileID: 11400000, guid: 5d15e392db882a2489d4ceb3967acea8, type: 2}
+  - {fileID: 11400000, guid: c0ca58323f1d63041be1c6b9f87d5907, type: 2}
+  - {fileID: 11400000, guid: 22f3f9b200a66da46b978a94eea2c24c, type: 2}
+  - {fileID: 11400000, guid: 9ec07368a6c3d9647be206599b1c356e, type: 2}
+  - {fileID: 11400000, guid: efe6fb425dc51844f8baab9b9be22aec, type: 2}
+  - {fileID: 11400000, guid: 90c05aa9f4611ab4588f4064a3dc5824, type: 2}
+  - {fileID: 11400000, guid: 5f78c7982555ec14087c64b15076ac00, type: 2}
   activeTribes: 
   maxTribesInGame: 5
 --- !u!4 &518160504
@@ -3324,6 +3338,7 @@ MonoBehaviour:
   targetingCursor: {fileID: 0}
   selectedUnit: {fileID: 0}
   sellButton: {fileID: 0}
+  sellZone: {fileID: 0}
   pauseMenuPanel: {fileID: 1727393479}
   currentPhase: 0
 --- !u!1 &521558341
@@ -4474,6 +4489,7 @@ RectTransform:
   - {fileID: 213047058}
   - {fileID: 2034697788}
   - {fileID: 21820569}
+  - {fileID: 217183224}
   - {fileID: 474529402}
   - {fileID: 796921627}
   - {fileID: 1257812066}
@@ -4491,7 +4507,6 @@ RectTransform:
   - {fileID: 1033236896}
   - {fileID: 1078376424}
   - {fileID: 858376398}
-  - {fileID: 217183224}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -5736,6 +5751,22 @@ MonoBehaviour:
   triggerTribeUpdate: 0
   heroToSwapIn: {fileID: 0}
   triggerHeroSwap: 0
+  unitToSpawn: {fileID: 0}
+  spawnOnPlayerBoard: 0
+  spawnOnEnemyBoard: 0
+  spawnTestDummyAlly: 0
+  spawnTestDummyEnemy: 0
+  dummyName: Custom Test
+  dummyAttack: 1
+  dummyHealth: 1
+  dummyTaunt: 0
+  dummyDivineShield: 0
+  dummyPoison: 0
+  dummyVenomous: 0
+  dummyReborn: 0
+  dummyStealth: 0
+  spawnCustomAlly: 0
+  spawnCustomEnemy: 0
   actionInterval: 0.2
 --- !u!4 &1144887708
 Transform:
