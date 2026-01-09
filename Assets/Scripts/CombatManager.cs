@@ -55,12 +55,7 @@ public class CombatManager : MonoBehaviour
     {
         if (GameManager.instance.currentPhase != GameManager.GamePhase.Recruit) return;
 
-        // --- FREEZE FIX: HIDE SHOP ONLY ---
-        if (shopContainer != null) 
-        {
-            // Do NOT Destroy children here. Just hide the container.
-            shopContainer.gameObject.SetActive(false);
-        }
+        if (shopContainer != null) shopContainer.gameObject.SetActive(false);
         
         SaveRoster();
         GameManager.instance.currentPhase = GameManager.GamePhase.Combat;
@@ -74,6 +69,14 @@ public class CombatManager : MonoBehaviour
         if (AudioManager.instance != null) AudioManager.instance.PlaySFX(combatStartClip);
 
         SpawnEnemies(); 
+        
+        // NEW: Trigger Start of Combat Abilities (e.g. Rabid Bear)
+        if (AbilityManager.instance != null)
+        {
+            AbilityManager.instance.TriggerCombatStartAbilities();
+            AbilityManager.instance.RecalculateAuras();
+        }
+
         StartCoroutine(CombatRoutine());
     }
 
@@ -134,93 +137,90 @@ public class CombatManager : MonoBehaviour
     {
         yield return new WaitForSeconds(combatPace); 
 
+        // Initial fetch
         List<CardDisplay> players = GetUnits(playerBoard);
         List<CardDisplay> enemies = GetUnits(enemyBoard);
 
-        Dictionary<CardDisplay, int> combatHealths = new Dictionary<CardDisplay, int>();
-        Dictionary<CardDisplay, int> combatAttacks = new Dictionary<CardDisplay, int>();
-        Dictionary<CardDisplay, bool> currentShields = new Dictionary<CardDisplay, bool>();
-
-        foreach (var p in players) { combatHealths[p] = p.currentHealth; combatAttacks[p] = p.currentAttack; currentShields[p] = p.hasDivineShield; }
-        foreach (var e in enemies) { combatHealths[e] = e.currentHealth; combatAttacks[e] = e.currentAttack; currentShields[e] = e.hasDivineShield; }
-
         int round = 1;
 
+        // Main Loop: Continues as long as both sides have units
         while (players.Count > 0 && enemies.Count > 0)
         {
+            // REFRESH LISTS at start of every round to catch spawns/deaths
             players = GetUnits(playerBoard);
             enemies = GetUnits(enemyBoard);
             if (players.Count == 0 || enemies.Count == 0) break;
 
+            // 1. Determine Attackers (Leftmost)
             CardDisplay pAttacker = players[0];
             CardDisplay eAttacker = enemies[0];
             
+            // 2. Select Targets
             CardDisplay targetOfPlayer = GetTarget(enemies); 
             CardDisplay targetOfEnemy = GetTarget(players);  
 
-            // Sync dynamic tokens
-            if (!combatHealths.ContainsKey(pAttacker)) { combatHealths[pAttacker] = pAttacker.currentHealth; combatAttacks[pAttacker] = pAttacker.currentAttack; currentShields[pAttacker] = pAttacker.hasDivineShield; }
-            if (!combatHealths.ContainsKey(eAttacker)) { combatHealths[eAttacker] = eAttacker.currentHealth; combatAttacks[eAttacker] = eAttacker.currentAttack; currentShields[eAttacker] = eAttacker.hasDivineShield; }
-            if (!combatHealths.ContainsKey(targetOfPlayer)) { combatHealths[targetOfPlayer] = targetOfPlayer.currentHealth; combatAttacks[targetOfPlayer] = targetOfPlayer.currentAttack; currentShields[targetOfPlayer] = targetOfPlayer.hasDivineShield; }
-            if (!combatHealths.ContainsKey(targetOfEnemy)) { combatHealths[targetOfEnemy] = targetOfEnemy.currentHealth; combatAttacks[targetOfEnemy] = targetOfEnemy.currentAttack; currentShields[targetOfEnemy] = targetOfEnemy.hasDivineShield; }
-
-            yield return StartCoroutine(AnimateAttack(pAttacker.transform, targetOfPlayer.transform));
-            yield return StartCoroutine(AnimateAttack(eAttacker.transform, targetOfEnemy.transform));
-
-            if (AudioManager.instance != null) AudioManager.instance.PlaySFX(hitClip);
-
-            int damageFromPlayer = combatAttacks[pAttacker];
-            int damageFromEnemy = combatAttacks[eAttacker];
-
-            StringBuilder roundLog = new StringBuilder();
-            roundLog.Append($"<b>Round {round}</b>: ");
-
-            string pLog = $"[P] {pAttacker.unitData.unitName} -> {targetOfPlayer.unitData.unitName}";
-            if (currentShields[targetOfPlayer] && damageFromPlayer > 0)
+            // --- PLAYER ATTACK ---
+            if (pAttacker != null && targetOfPlayer != null)
             {
-                currentShields[targetOfPlayer] = false;
-                targetOfPlayer.BreakShield(); 
-                pLog += " (Blocked)";
-                damageFromPlayer = 0; 
-            }
-            combatHealths[targetOfPlayer] -= damageFromPlayer;
-            pLog += $" ({damageFromPlayer} dmg)";
+                yield return StartCoroutine(AnimateAttack(pAttacker.transform, targetOfPlayer.transform));
+                
+                if (AudioManager.instance != null) AudioManager.instance.PlaySFX(hitClip);
+                
+                // Logic: Deal actual damage
+                int dmg = pAttacker.currentAttack;
+                targetOfPlayer.TakeDamage(dmg); 
 
-            string eLog = $"[E] {eAttacker.unitData.unitName} -> {targetOfEnemy.unitData.unitName}";
-            if (currentShields[targetOfEnemy] && damageFromEnemy > 0)
-            {
-                currentShields[targetOfEnemy] = false;
-                targetOfEnemy.BreakShield();
-                eLog += " (Blocked)";
-                damageFromEnemy = 0;
-            }
-            combatHealths[targetOfEnemy] -= damageFromEnemy;
-            eLog += $" ({damageFromEnemy} dmg)";
-
-            roundLog.Append($"{pLog} | {eLog}. ");
-
-            UpdateCombatVisuals(targetOfPlayer, combatHealths[targetOfPlayer]);
-            UpdateCombatVisuals(targetOfEnemy, combatHealths[targetOfEnemy]);
-
-            bool enemyDies = combatHealths[targetOfPlayer] <= 0;
-            bool playerDies = combatHealths[targetOfEnemy] <= 0;
-
-            if (enemyDies) 
-            {
-                roundLog.Append($"<color=red>{targetOfPlayer.unitData.unitName} DIED</color>. ");
-                HandleDeath(targetOfPlayer, enemies);
-            }
-            if (playerDies) 
-            {
-                roundLog.Append($"<color=red>{targetOfEnemy.unitData.unitName} DIED</color>. ");
-                HandleDeath(targetOfEnemy, players);
+                // Log
+                StringBuilder pLog = new StringBuilder();
+                pLog.Append($"<b>Round {round} [P]</b>: {pAttacker.unitData.unitName} -> {targetOfPlayer.unitData.unitName} ({dmg} dmg)");
+                
+                if (targetOfPlayer.currentHealth <= 0)
+                {
+                    pLog.Append($" <color=red>DIED</color>");
+                    HandleDeath(targetOfPlayer);
+                }
+                Debug.Log(pLog.ToString());
             }
 
-            Debug.Log(roundLog.ToString());
+            // RE-CHECK STATE: Player attack (or a triggered Rush) might have ended combat or killed the enemy attacker
+            enemies = GetUnits(enemyBoard); 
+            players = GetUnits(playerBoard);
+            if (enemies.Count == 0 || players.Count == 0) break;
+
+            // --- ENEMY ATTACK ---
+            // Ensure eAttacker is still alive and on board
+            if (eAttacker != null && eAttacker.gameObject.activeInHierarchy && eAttacker.currentHealth > 0 && targetOfEnemy != null)
+            {
+                // Re-validate target (Player's unit might have died from Thorns/Rush in the microseconds between)
+                if (targetOfEnemy == null || !targetOfEnemy.gameObject.activeInHierarchy)
+                    targetOfEnemy = GetTarget(players);
+
+                if (targetOfEnemy != null)
+                {
+                    yield return StartCoroutine(AnimateAttack(eAttacker.transform, targetOfEnemy.transform));
+                    
+                    if (AudioManager.instance != null) AudioManager.instance.PlaySFX(hitClip);
+
+                    int dmg = eAttacker.currentAttack;
+                    targetOfEnemy.TakeDamage(dmg);
+
+                    StringBuilder eLog = new StringBuilder();
+                    eLog.Append($"<b>Round {round} [E]</b>: {eAttacker.unitData.unitName} -> {targetOfEnemy.unitData.unitName} ({dmg} dmg)");
+                    
+                    if (targetOfEnemy.currentHealth <= 0)
+                    {
+                        eLog.Append($" <color=red>DIED</color>");
+                        HandleDeath(targetOfEnemy);
+                    }
+                    Debug.Log(eLog.ToString());
+                }
+            }
+
             round++;
             yield return new WaitForSeconds(combatPace);
         }
 
+        // --- END OF COMBAT ---
         enemies = GetUnits(enemyBoard);
         players = GetUnits(playerBoard);
         int damageTaken = 0;
@@ -236,22 +236,36 @@ public class CombatManager : MonoBehaviour
 
     CardDisplay GetTarget(List<CardDisplay> defenders)
     {
+        // Filter out dead/inactive units just in case
+        var validDefenders = new List<CardDisplay>();
+        foreach(var d in defenders) if(d != null && d.currentHealth > 0 && d.gameObject.activeInHierarchy) validDefenders.Add(d);
+        
+        if (validDefenders.Count == 0) return null;
+
         List<CardDisplay> taunts = new List<CardDisplay>();
-        foreach(var d in defenders)
+        foreach(var d in validDefenders)
         {
-            if (d.unitData.hasTaunt) taunts.Add(d);
+            if (d.hasTaunt) taunts.Add(d);
         }
 
         if (taunts.Count > 0) return taunts[Random.Range(0, taunts.Count)];
-        return defenders[Random.Range(0, defenders.Count)];
+        return validDefenders[Random.Range(0, validDefenders.Count)];
     }
 
-    void HandleDeath(CardDisplay unit, List<CardDisplay> list)
+    // UPDATED: Now Public for AbilityManager to access (Rush/Snipes)
+    public void HandleDeath(CardDisplay unit)
     {
+        if (unit == null) return;
+        
+        // Prevent double-death processing
+        if (!unit.gameObject.activeInHierarchy) return;
+
         if (unit.hasReborn)
         {
             Debug.Log($"{unit.unitData.unitName} Reborn triggered!");
             unit.hasReborn = false;
+            unit.currentHealth = 1;
+            unit.UpdateVisuals();
             return;
         }
 
@@ -262,6 +276,7 @@ public class CombatManager : MonoBehaviour
         if (graveyard != null) unit.transform.SetParent(graveyard);
         unit.gameObject.SetActive(false); 
 
+        // Trigger Deathrattles
         if (AbilityManager.instance != null)
         {
             try 
@@ -271,19 +286,10 @@ public class CombatManager : MonoBehaviour
             }
             catch (System.Exception e) { Debug.LogError($"Deathrattle error: {e.Message}"); }
         }
-
-        list.Remove(unit);
+        
+        // Note: We do not Destroy immediatey if we want to support resurrection later, 
+        // but for now Destroying helps performance.
         Destroy(unit.gameObject);
-    }
-
-    void UpdateCombatVisuals(CardDisplay unit, int currentHp)
-    {
-        if (unit.healthText == null) return;
-        unit.healthText.text = currentHp.ToString();
-        int maxHp = unit.isGolden ? unit.unitData.baseHealth * 2 : unit.unitData.baseHealth;
-        if (currentHp < unit.permanentHealth) unit.healthText.color = Color.red;
-        else if (currentHp > maxHp) unit.healthText.color = Color.green;
-        else unit.healthText.color = Color.black;
     }
 
     IEnumerator AnimateAttack(Transform attacker, Transform target)
@@ -312,7 +318,6 @@ public class CombatManager : MonoBehaviour
                 proj.Initialize(startPos, targetPos, travelTime);
                 
                 usedProjectile = true;
-                
                 yield return new WaitForSeconds(travelTime);
             }
             else
@@ -353,7 +358,7 @@ public class CombatManager : MonoBehaviour
         foreach(Transform child in board)
         {
             CardDisplay cd = child.GetComponent<CardDisplay>();
-            if(cd != null && cd.gameObject.activeSelf) list.Add(cd);
+            if(cd != null && cd.gameObject.activeInHierarchy && cd.currentHealth > 0) list.Add(cd);
         }
         return list;
     }
@@ -427,7 +432,6 @@ public class CombatManager : MonoBehaviour
         }
         playerBoard.DetachChildren(); 
 
-        // --- FREEZE FIX: SHOW SHOP AGAIN ---
         if (shopContainer != null) 
         {
             shopContainer.gameObject.SetActive(true);

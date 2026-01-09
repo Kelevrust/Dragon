@@ -16,7 +16,7 @@ MonoBehaviour:
   name: 
   description: 
   triggerType: 2
-  targetType: 7
+  targetType: 6
   effectType: 0
   metaTriggerType: 0
   abilityToGrant: {fileID: 0}
@@ -29,6 +29,8 @@ MonoBehaviour:
   valueY: 0
   tokenUnit: {fileID: 0}
   keywordToGive: 0
+  consumeAbsorbsAbilities: 0
+  consumeAbsorbsAbilitiesIfGolden: 0
   vfxPrefab: {fileID: 0}
   soundEffect: {fileID: 0}
   vfxSpawnPoint: 0

@@ -67,20 +67,9 @@ public class AbilityManager : MonoBehaviour
 
     // --- SPECIFIC EVENT HANDLERS ---
 
-    public void TriggerTurnStartAbilities()
-    {
-        TriggerBoardPhase(AbilityTrigger.OnTurnStart);
-    }
-
-    public void TriggerTurnEndAbilities()
-    {
-        TriggerBoardPhase(AbilityTrigger.OnTurnEnd);
-    }
-    
-    public void TriggerCombatStartAbilities()
-    {
-        TriggerBoardPhase(AbilityTrigger.OnCombatStart);
-    }
+    public void TriggerTurnStartAbilities() { TriggerBoardPhase(AbilityTrigger.OnTurnStart); }
+    public void TriggerTurnEndAbilities() { TriggerBoardPhase(AbilityTrigger.OnTurnEnd); }
+    public void TriggerCombatStartAbilities() { TriggerBoardPhase(AbilityTrigger.OnCombatStart); }
 
     void TriggerBoardPhase(AbilityTrigger trigger)
     {
@@ -89,10 +78,8 @@ public class AbilityManager : MonoBehaviour
         List<CardDisplay> units = new List<CardDisplay>();
         foreach(Transform t in GameManager.instance.playerBoard) 
         {
-            if (t.gameObject.activeInHierarchy)
-                units.Add(t.GetComponent<CardDisplay>());
+            if (t.gameObject.activeInHierarchy) units.Add(t.GetComponent<CardDisplay>());
         }
-
         foreach (CardDisplay unit in units)
         {
             if (unit != null) TriggerAbilities(trigger, unit, GameManager.instance.playerBoard);
@@ -331,6 +318,13 @@ public class AbilityManager : MonoBehaviour
         {
             if (source == null || !source.gameObject.activeInHierarchy || !source.isPurchased) continue; 
             
+            // FIX: Only apply Auras if the source is physically on the Board (not Hand)
+            Transform p = source.transform.parent;
+            bool isOnBoard = (GameManager.instance != null && p == GameManager.instance.playerBoard) || 
+                             (CombatManager.instance != null && p == CombatManager.instance.enemyBoard);
+                             
+            if (!isOnBoard) continue;
+
             List<AbilityData> abilities = source.runtimeAbilities ?? source.unitData.abilities;
             if (abilities == null) continue;
 
@@ -617,9 +611,17 @@ public class AbilityManager : MonoBehaviour
             
             Debug.Log($"{source.unitData.unitName} performs Immediate Attack/Rush on {targetUnit.unitData.unitName}!");
 
+            // UPDATED: Use same logic as CombatManager for consistency
             int dmg = source.currentAttack;
             targetUnit.TakeDamage(dmg);
             source.TakeDamage(targetUnit.currentAttack);
+            
+            // CRITICAL FIX: Check for death immediately so we don't have zombie units
+            if (CombatManager.instance != null)
+            {
+                if (targetUnit.currentHealth <= 0) CombatManager.instance.HandleDeath(targetUnit);
+                if (source.currentHealth <= 0) CombatManager.instance.HandleDeath(source);
+            }
         }
     }
 

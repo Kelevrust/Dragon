@@ -233,13 +233,12 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         if (descriptionText != null) descriptionText.text = unitData.description;
         if (mechanicsText != null) mechanicsText.text = GenerateMechanicsText();
         
-        // --- SPRITE FIX ---
         if (artworkImage != null)
         {
             if (unitData.artwork != null) 
             {
                 artworkImage.sprite = unitData.artwork;
-                artworkImage.gameObject.SetActive(true); // Force show
+                artworkImage.gameObject.SetActive(true); 
             }
         }
         
@@ -285,7 +284,6 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     {
         StringBuilder sb = new StringBuilder();
 
-        // Check ALL keywords
         if (hasTaunt) sb.Append("<b>Taunt</b>. ");
         if (hasDivineShield) sb.Append("<b>Divine Shield</b>. "); 
         if (hasReborn) sb.Append("<b>Reborn</b>. "); 
@@ -457,7 +455,6 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         if (canvasTransform != null) transform.SetParent(canvasTransform);
         canvasGroup.blocksRaycasts = false;
         
-        // NEW: Toggle Sell Zone
         if (GameManager.instance != null) GameManager.instance.ToggleSellZone(true);
 
         if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
@@ -490,7 +487,6 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         canvasGroup.blocksRaycasts = true;
         transform.DOScale(1f, 0.2f);
         
-        // NEW: Toggle Sell Zone
         if (GameManager.instance != null) GameManager.instance.ToggleSellZone(false);
 
         if (GameManager.instance.currentPhase != GameManager.GamePhase.Recruit || GameManager.instance.isUnconscious) 
@@ -538,18 +534,15 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
             bool hitBoard = hitObject.name == "PlayerBoard" || (hitObject.transform.parent != null && hitObject.transform.parent.name == "PlayerBoard");
             if (hitBoard)
             {
-                // Calculate position index
                 int newIndex = 0;
                 foreach(Transform child in GameManager.instance.playerBoard)
                 {
-                    // If we are already on the board, skip self to find relative index
                     if (child == transform) continue; 
                     if (transform.position.x > child.position.x) newIndex++;
                 }
 
                 if (!isPurchased)
                 {
-                    // Drag from Shop -> Board (Buy to Hand as requested)
                     if (GameManager.instance.TryBuyToHand(unitData, this)) 
                     {
                         actionHandled = true;
@@ -557,7 +550,6 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
                 }
                 else if (originalParent == GameManager.instance.playerHand)
                 {
-                    // Drag from Hand -> Board (Play)
                     if (GameManager.instance.TryPlayCardToBoard(this, newIndex)) 
                     {
                         actionHandled = true;
@@ -565,7 +557,6 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
                 }
                 else if (originalParent == GameManager.instance.playerBoard)
                 {
-                    // Reorder on Board
                     transform.SetParent(GameManager.instance.playerBoard);
                     transform.SetSiblingIndex(newIndex);
                     GameManager.instance.LogAction($"Reordered Board: {unitData.unitName} to pos {newIndex}");
@@ -583,9 +574,13 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
 
     void ReturnToStart()
     {
-        transform.DOMove(originalParent.GetChild(originalIndex).position, 0.2f).OnComplete(() => {
-             transform.SetParent(originalParent);
-             transform.SetSiblingIndex(originalIndex);
+        // FIX: Re-parent first so the layout group handles the snap back.
+        // Trying to query GetChild() on the parent we just left will cause an index out of bounds error.
+        
+        transform.SetParent(originalParent);
+        transform.SetSiblingIndex(originalIndex);
+        
+        transform.DOLocalMove(Vector3.zero, 0.2f).OnComplete(() => {
              if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
         });
     }
