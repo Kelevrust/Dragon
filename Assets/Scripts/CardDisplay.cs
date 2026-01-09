@@ -514,6 +514,17 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
                 }
             }
             
+            // --- CHECK FOR MAGNETIZE / TARGETING ---
+            CardDisplay hitCard = hitObject.GetComponent<CardDisplay>();
+            if (hitCard != null && hitCard != this)
+            {
+                if (AbilityManager.instance != null && AbilityManager.instance.TryHandleInteraction(this, hitCard))
+                {
+                    actionHandled = true;
+                    break;
+                }
+            }
+            
             bool hitHand = hitObject.name == "PlayerHand" || (hitObject.transform.parent != null && hitObject.transform.parent.name == "PlayerHand");
             if (hitHand)
             {

@@ -383,6 +383,28 @@ public class GameManager : MonoBehaviour
         TrySpawnUnit(data, AbilitySpawnLocation.BoardOnly, parent); 
     }
 
+    public bool TryPlaySpell(CardDisplay spellCard, CardDisplay target)
+    {
+        if (spellCard == null) return false;
+
+        // Check Cost (Assumes unitData.cost is accurate for spells)
+        if (!TrySpendGold(spellCard.unitData.cost)) 
+        {
+            Debug.Log("Not enough gold to cast spell!");
+            return false;
+        }
+
+        LogAction($"Cast Spell: {spellCard.unitData.unitName} on {target.unitData.unitName}");
+
+        // Cleanup the spell card from hand
+        Destroy(spellCard.gameObject);
+        
+        // Recalculate immediately so the visual buff appears
+        if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
+        
+        return true;
+    }
+
     public bool TrySpawnUnit(UnitData data, AbilitySpawnLocation location, Transform specificTargetParent = null)
     {
         if (data == null || cardPrefab == null) return false;

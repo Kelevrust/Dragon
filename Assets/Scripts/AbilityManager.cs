@@ -8,6 +8,45 @@ public class AbilityManager : MonoBehaviour
 
     void Awake() { instance = this; }
 
+    // --- INTERACTION HANDLER (NEW) ---
+    public bool TryHandleInteraction(CardDisplay source, CardDisplay target)
+    {
+        if (source == null || target == null || source == target) return false;
+        
+        // 1. Magnetize Logic
+        List<AbilityData> abilities = source.runtimeAbilities ?? source.unitData.abilities;
+        if (abilities != null)
+        {
+            foreach(var ab in abilities)
+            {
+                if (ab.effectType == AbilityEffect.Magnetize)
+                {
+                    // Check if target is Mech (Construct)
+                    if (target.unitData.tribe == Tribe.Construct)
+                    {
+                        ApplyEffect(ab, target, source, null);
+                        return true; 
+                    }
+                }
+            }
+        }
+
+        // 2. Spell Logic (if dragging a spell onto a unit)
+        if (source.unitData.cardType == CardType.Spell)
+        {
+            // Cast on target
+            TriggerAbilities(AbilityTrigger.OnSpellCast, source, null, target);
+            
+            // Check if played successfully (handled by GameManager usually, but simplistic here)
+            if (GameManager.instance.TryPlaySpell(source, target))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     // --- CORE TRIGGER SYSTEM ---
 
     public void TriggerAbilities(AbilityTrigger trigger, CardDisplay sourceCard, Transform overrideBoard = null, CardDisplay interactionTarget = null)
@@ -27,7 +66,6 @@ public class AbilityManager : MonoBehaviour
         // 1. Check for Meta-Multipliers (e.g. Rivendare doubling Deathrattles)
         int executionCount = 1;
         
-        // Scan for passive auras that modify THIS trigger type on the same board
         Transform boardToScan = overrideBoard;
         if (boardToScan == null && sourceCard.transform.parent != null) boardToScan = sourceCard.transform.parent;
         
@@ -35,6 +73,7 @@ public class AbilityManager : MonoBehaviour
         {
             foreach(Transform child in boardToScan)
             {
+                if (child == null) continue;
                 CardDisplay unit = child.GetComponent<CardDisplay>();
                 if (unit != null && unit.gameObject.activeInHierarchy && unit.runtimeAbilities != null)
                 {
@@ -170,13 +209,10 @@ public class AbilityManager : MonoBehaviour
         TriggerAbilities(AbilityTrigger.OnDealDamage, dealer, board, victim);
     }
     
-    // Triggered when a Spell Card is played
     public void TriggerSpellCastAbilities(CardDisplay spellCard, Transform board)
     {
-        // 1. Self Trigger
         TriggerAbilities(AbilityTrigger.OnPlay, spellCard, board);
 
-        // 2. Board Listeners (Arcane tribe, etc.)
         if (board == null) return;
         foreach(Transform child in board)
         {
@@ -184,10 +220,7 @@ public class AbilityManager : MonoBehaviour
             CardDisplay ally = child.GetComponent<CardDisplay>();
             if (ally != null && ally.gameObject.activeInHierarchy)
             {
-                // "Whenever you cast a spell..."
                 TriggerAbilities(AbilityTrigger.OnSpellCast, ally, board, spellCard);
-                
-                // Also trigger generic "OnAnyPlay" if applicable
                 TriggerAbilities(AbilityTrigger.OnAnyPlay, ally, board, spellCard);
             }
         }
@@ -209,7 +242,6 @@ public class AbilityManager : MonoBehaviour
                 {
                     if (ability != null)
                     {
-                        // Standard Synergy
                         if (ability.triggerType == AbilityTrigger.OnAllyPlay)
                         {
                             bool tribeMatch = ability.targetTribe == Tribe.None || (playedCard.unitData != null && ability.targetTribe == playedCard.unitData.tribe);
@@ -219,10 +251,8 @@ public class AbilityManager : MonoBehaviour
                             }
                         }
                         
-                        // Global "On Any Play" Synergy
                         if (ability.triggerType == AbilityTrigger.OnAnyPlay)
                         {
-                            // This fires for ANY unit played, tribe checks handled in execution or conditions if needed
                             ExecuteAbility(ability, ally, playedCard, board);
                         }
                     }
@@ -231,15 +261,12 @@ public class AbilityManager : MonoBehaviour
         }
     }
     
-    // Handle "On Summon" triggers (Tokens + Played Cards)
     public void TriggerAllySummonAbilities(CardDisplay summonedUnit, Transform board)
     {
         if (board == null || summonedUnit == null) return;
         
-        // 1. Self Trigger (OnSpawn)
         TriggerAbilities(AbilityTrigger.OnSpawn, summonedUnit, board);
 
-        // 2. Native Rush Handling
         if (summonedUnit.hasRush || (summonedUnit.unitData != null && summonedUnit.unitData.hasRush)) 
         {
             if (GameManager.instance != null && GameManager.instance.currentPhase == GameManager.GamePhase.Combat)
@@ -248,14 +275,10 @@ public class AbilityManager : MonoBehaviour
             }
         }
 
-        // 3. Ally Triggers (Pack Leader)
         foreach(Transform child in board)
         {
             if (child == null) continue;
-            
             CardDisplay ally = child.GetComponent<CardDisplay>();
-            
-            // Basic validity checks
             if (ally == null || ally == summonedUnit || !ally.gameObject.activeInHierarchy) continue;
 
             List<AbilityData> abilities = ally.runtimeAbilities ?? ally.unitData.abilities;
@@ -282,8 +305,6 @@ public class AbilityManager : MonoBehaviour
             }
         }
     }
-
-    // --- HERO POWERS ---
 
     public void CastHeroPower(AbilityData ability)
     {
@@ -318,7 +339,6 @@ public class AbilityManager : MonoBehaviour
         {
             if (source == null || !source.gameObject.activeInHierarchy || !source.isPurchased) continue; 
             
-            // FIX: Only apply Auras if the source is physically on the Board (not Hand)
             Transform p = source.transform.parent;
             bool isOnBoard = (GameManager.instance != null && p == GameManager.instance.playerBoard) || 
                              (CombatManager.instance != null && p == CombatManager.instance.enemyBoard);
@@ -343,9 +363,9 @@ public class AbilityManager : MonoBehaviour
         }
     }
 
-    void ExecuteAbility(AbilityData ability, CardDisplay source, CardDisplay interactionTarget, Transform overrideBoard)
+    void ExecuteAbility(AbilityData ability, CardDisplay source, CardDisplay interactionTarget, Transform overrideBoard, int depth = 0)
     {
-        if (ability == null) return;
+        if (ability == null || depth > 10) return; // Prevent StackOverflow
 
         List<CardDisplay> targets = FindTargets(ability, source, interactionTarget, overrideBoard);
 
@@ -357,18 +377,18 @@ public class AbilityManager : MonoBehaviour
 
         if (targets.Count == 0 && isGlobalEffect)
         {
-            ApplyEffect(ability, null, source, overrideBoard); 
+            ApplyEffect(ability, null, source, overrideBoard, depth + 1); 
         }
         else
         {
             foreach (CardDisplay target in targets)
             {
-                ApplyEffect(ability, target, source, overrideBoard);
+                ApplyEffect(ability, target, source, overrideBoard, depth + 1);
             }
         }
     }
 
-    void ApplyEffect(AbilityData ability, CardDisplay target, CardDisplay source, Transform overrideBoard)
+    void ApplyEffect(AbilityData ability, CardDisplay target, CardDisplay source, Transform overrideBoard, int depth = 0)
     {
         if (ability == null) return;
 
@@ -382,18 +402,15 @@ public class AbilityManager : MonoBehaviour
         int finalY = ability.valueY * mult;
         
         int scalingFactor = CalculateScaling(ability, source, overrideBoard);
-        if (scalingFactor != 1)
-        {
-            finalX *= scalingFactor;
-            finalY *= scalingFactor;
-        }
+        if (scalingFactor != 1) { finalX *= scalingFactor; finalY *= scalingFactor; }
 
         switch (ability.effectType)
         {
             case AbilityEffect.BuffStats:
                 if (target != null)
                 {
-                    bool isPermanent = ability.duration == BuffDuration.Permanent;
+                    // FIX: Passive Auras must NEVER trigger Permanent stats, or they scale infinitely on Recalculate
+                    bool isPermanent = ability.duration == BuffDuration.Permanent && ability.triggerType != AbilityTrigger.PassiveAura;
                     
                     if (isPermanent)
                     {
@@ -497,7 +514,8 @@ public class AbilityManager : MonoBehaviour
                     }
                     
                     target.UpdateVisuals();
-                    Destroy(source.gameObject);
+                    // IMPORTANT: Destroy source immediately to prevent loop
+                    Destroy(source.gameObject); 
                     RecalculateAuras();
                 }
                 break;
@@ -540,7 +558,6 @@ public class AbilityManager : MonoBehaviour
                     source.currentAttack += eatenAtk;
                     source.currentHealth += eatenHp;
 
-                    // Steal Keywords & Abilities based on settings
                     bool stealAbilities = ability.consumeAbsorbsAbilities;
                     if (isSourceGolden && ability.consumeAbsorbsAbilitiesIfGolden) stealAbilities = true;
 
@@ -572,21 +589,21 @@ public class AbilityManager : MonoBehaviour
                 break;
                 
             case AbilityEffect.Counter:
-                // Placeholder for Counterspell logic.
-                // In a full implementation, we'd add a "Countered" status to the target
-                // or register this unit as a listener to cancel the next event.
                 Debug.Log($"Counter effect triggered by {source.name} on {target.name}");
                 break;
         }
 
-        if (ability.chainedAbility != null)
+        // Fix: Ensure we don't loop if chainedAbility refers to self
+        if (ability.chainedAbility != null && ability.chainedAbility != ability)
         {
-            ExecuteAbility(ability.chainedAbility, source, target, overrideBoard);
+            ExecuteAbility(ability.chainedAbility, source, target, overrideBoard, depth + 1);
         }
     }
 
     void PerformImmediateAttack(CardDisplay source)
     {
+        if (source == null) return; // FIX: Null check
+
         Transform enemyBoard = null;
         if (GameManager.instance != null && CombatManager.instance != null)
         {
@@ -611,12 +628,10 @@ public class AbilityManager : MonoBehaviour
             
             Debug.Log($"{source.unitData.unitName} performs Immediate Attack/Rush on {targetUnit.unitData.unitName}!");
 
-            // UPDATED: Use same logic as CombatManager for consistency
             int dmg = source.currentAttack;
             targetUnit.TakeDamage(dmg);
             source.TakeDamage(targetUnit.currentAttack);
             
-            // CRITICAL FIX: Check for death immediately so we don't have zombie units
             if (CombatManager.instance != null)
             {
                 if (targetUnit.currentHealth <= 0) CombatManager.instance.HandleDeath(targetUnit);
@@ -642,6 +657,7 @@ public class AbilityManager : MonoBehaviour
                     int count = 0;
                     foreach(Transform child in board)
                     {
+                        if (child == null) continue;
                         CardDisplay cd = child.GetComponent<CardDisplay>();
                         if (cd != null && cd.unitData != null && cd.unitData.tribe == ability.targetTribe) count++;
                     }
@@ -676,6 +692,7 @@ public class AbilityManager : MonoBehaviour
         List<CardDisplay> allies = new List<CardDisplay>();
         foreach(Transform child in board)
         {
+            if (child == null) continue;
             CardDisplay cd = child.GetComponent<CardDisplay>();
             if(cd != null && cd.gameObject.activeInHierarchy) allies.Add(cd);
         }
@@ -685,11 +702,10 @@ public class AbilityManager : MonoBehaviour
             allies.Add(source);
         }
         
-        // Global Lists
         List<CardDisplay> allUnitsInGame = new List<CardDisplay>();
         if (ability.targetType == AbilityTarget.GlobalTribe || ability.targetType == AbilityTarget.GlobalCopies)
         {
-             allUnitsInGame = FindObjectsByType<CardDisplay>(FindObjectsSortMode.None).Where(c => c.gameObject.activeInHierarchy).ToList();
+             allUnitsInGame = FindObjectsByType<CardDisplay>(FindObjectsSortMode.None).Where(c => c != null && c.gameObject.activeInHierarchy).ToList();
         }
 
         switch (ability.targetType)
@@ -757,8 +773,11 @@ public class AbilityManager : MonoBehaviour
                         int index = source.transform.GetSiblingIndex();
                         if (index < otherBoard.childCount)
                         {
-                            CardDisplay opp = otherBoard.GetChild(index).GetComponent<CardDisplay>();
-                            if (opp != null && opp.gameObject.activeInHierarchy) targets.Add(opp);
+                            Transform t = otherBoard.GetChild(index);
+                            if (t != null) {
+                                CardDisplay opp = t.GetComponent<CardDisplay>();
+                                if (opp != null && opp.gameObject.activeInHierarchy) targets.Add(opp);
+                            }
                         }
                     }
                 }
@@ -769,6 +788,7 @@ public class AbilityManager : MonoBehaviour
                 {
                     foreach(Transform child in GameManager.instance.playerHand)
                     {
+                        if (child == null) continue;
                         CardDisplay cd = child.GetComponent<CardDisplay>();
                         if (cd != null && cd.gameObject.activeInHierarchy) targets.Add(cd);
                     }
@@ -780,6 +800,7 @@ public class AbilityManager : MonoBehaviour
                 {
                     foreach(Transform child in ShopManager.instance.shopContainer)
                     {
+                        if (child == null) continue;
                         CardDisplay cd = child.GetComponent<CardDisplay>();
                         if (cd != null && cd.gameObject.activeInHierarchy) targets.Add(cd);
                     }
@@ -792,6 +813,7 @@ public class AbilityManager : MonoBehaviour
                 {
                     foreach(Transform child in GameManager.instance.playerHand)
                     {
+                        if (child == null) continue;
                         CardDisplay cd = child.GetComponent<CardDisplay>();
                         if (cd != null && cd.gameObject.activeInHierarchy) targets.Add(cd);
                     }
