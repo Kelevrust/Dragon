@@ -151,7 +151,6 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         ResetToPermanent();
         UpdateVisuals();
     }
-
     public void ResetToPermanent()
     {
         // FIX: Include temporary buffs in calculation so Aura recalculation doesn't wipe them

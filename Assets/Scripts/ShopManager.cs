@@ -194,6 +194,13 @@ public class ShopManager : MonoBehaviour
         if (GameManager.instance.TrySpendGold(rerollCost))
         {
             GameManager.instance.LogAction("Rerolled Shop");
+
+            // EVALUATION HOOK
+            if (DecisionEvaluator.instance != null)
+            {
+                DecisionEvaluator.instance.EvaluateRerollDecision(rerollCost);
+            }
+
             RerollShop();
         }
     }
@@ -207,11 +214,19 @@ public class ShopManager : MonoBehaviour
 
         if (GameManager.instance.TrySpendGold(cost))
         {
+            int previousTier = tavernTier;
             tavernTier++;
             currentDiscount = 0;
             GameManager.instance.LogAction($"Upgraded Tavern to Tier {tavernTier}");
-            GameManager.instance.UpdateUI(); 
-            UpdateUpgradeUI(); 
+
+            // EVALUATION HOOK
+            if (DecisionEvaluator.instance != null)
+            {
+                DecisionEvaluator.instance.EvaluateLevelUpDecision(previousTier, tavernTier, cost);
+            }
+
+            GameManager.instance.UpdateUI();
+            UpdateUpgradeUI();
             GenerateCards();
         }
     }

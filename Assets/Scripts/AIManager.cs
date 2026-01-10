@@ -257,9 +257,10 @@ public class AIManager : MonoBehaviour
     }
 
     int GetUpgradeCost(int currentTier)
-{
-    // FIX: Return the cost of the NEXT tier, not the current tier
-    int nextTier = currentTier + 1;
-    if (nextTier < tierCosts.Length) return tierCosts[nextTier];
-    return 99;
+    {
+        // FIX: Return the cost of the NEXT tier, not the current tier
+        int nextTier = currentTier + 1;
+        if (nextTier < tierCosts.Length) return tierCosts[nextTier];
+        return 99;
+    }
 }

@@ -55,8 +55,14 @@ public class CombatManager : MonoBehaviour
     {
         if (GameManager.instance.currentPhase != GameManager.GamePhase.Recruit) return;
 
+        // EVALUATION HOOK: Evaluate end turn decision before combat
+        if (DecisionEvaluator.instance != null)
+        {
+            DecisionEvaluator.instance.EvaluateEndTurnDecision();
+        }
+
         if (shopContainer != null) shopContainer.gameObject.SetActive(false);
-        
+
         SaveRoster();
         GameManager.instance.currentPhase = GameManager.GamePhase.Combat;
         
@@ -151,7 +157,7 @@ public class CombatManager : MonoBehaviour
                 cd.permanentHealth = savedUnit.permHealth;
                 cd.currentAttack = savedUnit.permAttack;
                 cd.currentHealth = savedUnit.permHealth;
-                cd.RefreshVisuals();
+                cd.UpdateVisuals();
 
                 Destroy(newCard.GetComponent<UnityEngine.UI.Button>());
             }
@@ -290,42 +296,42 @@ public class CombatManager : MonoBehaviour
     }
 
     public void HandleDeath(CardDisplay unit)
-{
-    if (unit == null) return;
-    
-    if (!unit.gameObject.activeInHierarchy) return;
-
-    if (unit.hasReborn)
     {
-        Debug.Log($"{unit.unitData.unitName} Reborn triggered!");
-        unit.hasReborn = false;
-        unit.currentHealth = 1;
-        unit.UpdateVisuals();
-        return;
-    }
+        if (unit == null) return;
 
-    if (AudioManager.instance != null) AudioManager.instance.PlaySFX(deathClip);
+        if (!unit.gameObject.activeInHierarchy) return;
 
-    Transform oldBoard = unit.transform.parent;
-
-    // FIX: Trigger deathrattle BEFORE moving to graveyard/deactivating
-    if (AbilityManager.instance != null)
-    {
-        try 
-        { 
-            Debug.Log($"[DEATHRATTLE] Triggering OnDeath for {unit.unitData.unitName}");
-            AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnDeath, unit, oldBoard); 
-            AbilityManager.instance.TriggerAllyDeathAbilities(unit, oldBoard);
+        if (unit.hasReborn)
+        {
+            Debug.Log($"{unit.unitData.unitName} Reborn triggered!");
+            unit.hasReborn = false;
+            unit.currentHealth = 1;
+            unit.UpdateVisuals();
+            return;
         }
-        catch (System.Exception e) { Debug.LogError($"Deathrattle error: {e.Message}"); }
-    }
 
-    // Now move to graveyard and deactivate
-    if (graveyard != null) unit.transform.SetParent(graveyard);
-    unit.gameObject.SetActive(false); 
-    
-    Destroy(unit.gameObject);
-}
+        if (AudioManager.instance != null) AudioManager.instance.PlaySFX(deathClip);
+
+        Transform oldBoard = unit.transform.parent;
+
+        // FIX: Trigger deathrattle BEFORE moving to graveyard/deactivating
+        if (AbilityManager.instance != null)
+        {
+            try
+            {
+                Debug.Log($"[DEATHRATTLE] Triggering OnDeath for {unit.unitData.unitName}");
+                AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnDeath, unit, oldBoard);
+                AbilityManager.instance.TriggerAllyDeathAbilities(unit, oldBoard);
+            }
+            catch (System.Exception e) { Debug.LogError($"Deathrattle error: {e.Message}"); }
+        }
+
+        // Now move to graveyard and deactivate
+        if (graveyard != null) unit.transform.SetParent(graveyard);
+        unit.gameObject.SetActive(false);
+
+        Destroy(unit.gameObject);
+    }
 
     IEnumerator AnimateAttack(Transform attacker, Transform target)
     {
@@ -507,13 +513,14 @@ public class CombatManager : MonoBehaviour
         }
 
         GameManager.instance.turnNumber++;
-    GameManager.instance.StartRecruitPhase();
-    
-    if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
+        GameManager.instance.StartRecruitPhase();
 
-    // FIX: Removed duplicate shop calls. StartRecruitPhase() already calls HandleTurnStartRefresh()
-    // which internally calls ReduceUpgradeCost(). The duplicate calls were causing 
-    // upgrade cost to reduce by 2-3g per turn instead of 1g.
-    
-    Debug.Log("--- RETURN TO SHOP ---");
+        if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
+
+        // FIX: Removed duplicate shop calls. StartRecruitPhase() already calls HandleTurnStartRefresh()
+        // which internally calls ReduceUpgradeCost(). The duplicate calls were causing
+        // upgrade cost to reduce by 2-3g per turn instead of 1g.
+
+        Debug.Log("--- RETURN TO SHOP ---");
+    }
 }

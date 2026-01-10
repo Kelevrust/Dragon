@@ -1,11 +1,12 @@
 using UnityEngine;
-using TMPro; 
+using TMPro;
 using System.Collections.Generic;
-using UnityEngine.UI; 
-using System.Text; 
+using UnityEngine.UI;
+using System.Text;
 using UnityEngine.SceneManagement;
-using UnityEngine.InputSystem; 
+using UnityEngine.InputSystem;
 using System.Linq;
+using DG.Tweening;
 
 public class GameManager : MonoBehaviour
 {
@@ -85,8 +86,15 @@ public class GameManager : MonoBehaviour
     void Start()
     {
         ApplyHeroBonuses();
+
+        // EVALUATION HOOK: Start game tracking
+        if (DecisionEvaluator.instance != null && activeHero != null)
+        {
+            DecisionEvaluator.instance.StartNewGame(activeHero.heroName);
+        }
+
         StartRecruitPhase();
-        
+
         if (pauseMenuPanel != null) pauseMenuPanel.SetActive(false);
         if (bankPanel != null) bankPanel.SetActive(enableGoldCarryover);
         if (sellZone != null) sellZone.SetActive(false);
@@ -101,7 +109,7 @@ public class GameManager : MonoBehaviour
             string dist = tester.distributeMMR ? $"opponents distribution @{tester.mmrVariance}" : "Fixed Distribution";
             logDetails = $"MMR {tester.targetMMR} w/ {dist}";
         }
-        
+
         // Removed PlayerProfile check to avoid compilation errors if missing
         // else if (PlayerProfile.instance != null) { logDetails = $"MMR {PlayerProfile.instance.mmr}"; }
 
@@ -246,7 +254,7 @@ public class GameManager : MonoBehaviour
 
     public void StartRecruitPhase()
     {
-        if (playerHealth <= 0 && !isUnconscious) 
+        if (playerHealth <= 0 && !isUnconscious)
         {
             currentPhase = GamePhase.Death;
             Debug.Log("Cannot start Recruit Phase - Player is Dying/Dead");
@@ -255,6 +263,12 @@ public class GameManager : MonoBehaviour
 
         currentPhase = GamePhase.Recruit;
         currentPhaseTimer = recruitTime;
+
+        // EVALUATION HOOK: Start new phase
+        if (DecisionEvaluator.instance != null)
+        {
+            DecisionEvaluator.instance.StartNewPhase(turnNumber);
+        }
 
         int standardTurnCap = Mathf.Min(3 + turnNumber, 10);
         maxGold = standardTurnCap; 
@@ -580,18 +594,24 @@ public class GameManager : MonoBehaviour
         if (playerHand.childCount >= 7)
         {
             Debug.Log("Hand is full!");
-            gold += data.cost; 
+            gold += data.cost;
             return false;
         }
 
         sourceCard.transform.SetParent(playerHand);
         sourceCard.isPurchased = true;
         LogAction($"Bought {data.unitName} to Hand");
-        
+
         if (AnalyticsManager.instance != null)
             AnalyticsManager.instance.TrackPurchase(data.unitName, data.cost);
 
-        CheckForTriples(data); 
+        // EVALUATION HOOK
+        if (DecisionEvaluator.instance != null)
+        {
+            DecisionEvaluator.instance.EvaluateBuyDecision(data, data.cost);
+        }
+
+        CheckForTriples(data);
         return true;
     }
 
@@ -602,18 +622,24 @@ public class GameManager : MonoBehaviour
         if (playerBoard.childCount >= 7)
         {
             Debug.Log("Board is full!");
-            gold += data.cost; 
+            gold += data.cost;
             return false;
         }
 
         sourceCard.transform.SetParent(playerBoard);
         if (targetIndex >= 0) sourceCard.transform.SetSiblingIndex(targetIndex);
-        
+
         sourceCard.isPurchased = true;
         LogAction($"Bought {data.unitName} directly to Board");
-        
+
         if (AnalyticsManager.instance != null)
             AnalyticsManager.instance.TrackPurchase(data.unitName, data.cost);
+
+        // EVALUATION HOOK
+        if (DecisionEvaluator.instance != null)
+        {
+            DecisionEvaluator.instance.EvaluateBuyDecision(data, data.cost);
+        }
 
         if (AbilityManager.instance != null)
         {
@@ -705,18 +731,25 @@ public class GameManager : MonoBehaviour
         if (unitToSell == null || currentPhase != GamePhase.Recruit) return;
 
         LogAction($"Sold {unitToSell.unitData.unitName}");
+
+        // EVALUATION HOOK
+        if (DecisionEvaluator.instance != null)
+        {
+            DecisionEvaluator.instance.EvaluateSellDecision(unitToSell.unitData);
+        }
+
         gold += 1;
-        
+
         if (AbilityManager.instance != null)
         {
              // Potential logic for sell triggers here
         }
 
         Destroy(unitToSell.gameObject);
-        
+
         if (selectedUnit == unitToSell) DeselectUnit();
-        
-        if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras(); 
+
+        if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
         UpdateUI();
     }
 
