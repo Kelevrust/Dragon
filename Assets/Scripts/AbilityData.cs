@@ -35,97 +35,110 @@ public enum AbilityTarget
     AdjacentFriendly,
     AdjacentLeft,         // Left Neighbor only
     AdjacentRight,        // Right Neighbor only
-    AllFriendlyTribe,    
-    RandomFriendlyTribe,
-    SelectTarget,         // Required for targeted Hero Powers
-    Opponent,             // Target the Enemy Board or Hero
-    Killer,               // Target the specific unit that killed/damaged this unit
-    AllFriendlyEverywhere,// Targets Board AND Hand
-    AllInHand,            // Targets Hand Only
-    AllInShop,            // Targets Shop Only
-    GlobalTribe,          // Targets ALL units of targetTribe (Player + Enemy)
-    GlobalCopies,         // Targets ALL units matching targetUnitFilter (Player + Enemy)
-    OpposingUnit          // NEW: The unit directly across on the board
+    AllFriendlyTribe,     // e.g. "Give all Mechs +2/+2"
+    RandomFriendlyTribe,  // e.g. "Give a random Beast +2/+2"
+    Opponent,             // The enemy Hero (for damage)
+    OpposingUnit,         // The unit directly across (Chess style)
+    Killer,               // The unit that killed this one (Avenger)
+    AllInHand,            // Hand buff
+    AllInShop,            // Shop buff
+    AllFriendlyEverywhere,// Hand + Board
+    GlobalTribe,          // All Murlocs (Enemy & Friendly) - rarely used but fun
+    GlobalCopies,         // All copies of "Corpse Rat" everywhere
+
+    // --- NEW TARGETS FOR SPELLS ---
+    SelectTarget,         // Manual selection (generic)
+    AnyUnit,              // Select any unit on board
+    FriendlyUnit,         // Select any friendly unit
+    EnemyUnit             // Select any enemy unit
 }
 
 public enum AbilityEffect 
 { 
-    BuffStats, 
-    SummonUnit, 
-    DealDamage, 
-    HealHero, 
-    GainGold, 
-    ReduceUpgradeCost,
-    MakeGolden,      
-    Magnetize,          // Merge stats AND abilities into target
-    GiveKeyword,
-    ModifyTriggerCount, // Rivendare/Brann
-    ForceTrigger,       // Trigger another unit's ability
-    GrantAbility,       // Add a specific ability to the target's list
-    ImmediateAttack,    // Forces a combat trade
-    Consume,            // Eat target, gain stats (optional: abilities)
-    Counter             // NEW: Prevent the next [ValueX] instances of [MetaTrigger] on Target
+    BuffStats,        // Give +X/+Y
+    DealDamage,       // Deal X damage
+    SummonUnit,       // Summon a specific token
+    GainGold,         // Hero gains X Gold
+    HealHero,         // Restore X Health
+    GrantAbility,     // Give target a new AbilityData
+    MakeGolden,       // Turn target Golden
+    GiveKeyword,      // Give Divine Shield, Taunt, etc.
+    TransformUnit,    // Polymorph target into Token
+    ModifyTriggerCount, // Rivendare: Your Deathrattles trigger +X times
+    ReduceUpgradeCost,  // Reduce Tavern Tier cost by X
+    ForceTrigger,     // Trigger a unit's Deathrattle/Battlecry immediately
+    ImmediateAttack,  // Unit attacks immediately (Rush/Charge logic)
+    Magnetize,        // Combine stats/keywords with target Mech
+    Consume,          // Eat target unit to gain its stats
+    Counter,          // Counter the next spell/ability
+    Freeze            // Freeze target (Shop or Unit)
 }
 
-// Defines persistence logic
-public enum BuffDuration { Permanent, CombatTemporary, TurnTemporary }
+public enum BuffDuration
+{
+    Permanent,
+    UntilEndOfTurn,
+    UntilEndOfCombat
+}
 
 public enum ValueScaling
 {
-    None,                   // Fixed value
-    PerGold,                // Scale based on current Gold
-    PerTribeOnBoard,        // Scale based on Tribe Count
-    PerAllyCount,           // Scale based on total unit count
-    PerMissingHealth,       // Scale based on Hero missing HP
-    PerTribePlayedThisGame, // Scale based on total Tribe units played this game
-    PerTribePlayedThisTurn  // Scale based on total Tribe units played this turn
+    None,
+    PerGold,          // +1/+1 for each Gold you have
+    PerTribeOnBoard,  // +1/+1 for each Mech you have
+    PerAllyCount,     // +1/+1 for each Ally
+    PerMissingHealth, // +1/+1 for each missing Hero HP
+    PerTier           // +1/+1 per Tavern Tier
 }
 
-public enum KeywordType 
-{ 
-    None, 
-    DivineShield, 
-    Reborn, 
-    Taunt, 
-    Stealth, 
-    Poison,   
+public enum KeywordType
+{
+    None,
+    Taunt,
+    DivineShield,
+    Reborn,
+    Poison,
     Venomous,
-    Rush      
+    Stealth,
+    Rush,
+    Windfury,
+    Cleave
 }
 
-public enum VFXSpawnPoint { Target, Source, CenterOfBoard }
+public enum VFXSpawnPoint
+{
+    Source,
+    Target,
+    CenterOfBoard
+}
 
-// Required for GameManager.SpawnToken
-public enum AbilitySpawnLocation 
-{ 
-    BoardOnly, 
-    HandOnly, 
-    BoardThenHand, 
-    ReplaceTarget 
+// Added missing enum for spawning logic
+public enum AbilitySpawnLocation
+{
+    BoardOnly,
+    HandOnly,
+    BoardThenHand,
+    ReplaceTarget
 }
 
 [CreateAssetMenu(fileName = "New Ability", menuName = "DnD Battler/Ability Data")]
 public class AbilityData : ScriptableObject
 {
-    public string id;
-    public new string name; 
-    [TextArea] public string description;
-
-    [Header("Logic")]
+    [Header("Trigger Conditions")]
     public AbilityTrigger triggerType;
+    public AbilityTrigger metaTriggerType; // For "Your Deathrattles trigger twice" or "Counter next Spell"
+    
+    [Header("Targeting")]
     public AbilityTarget targetType;
+    
+    [Header("Effect")]
     public AbilityEffect effectType;
     
-    [Header("Meta Logic")]
-    [Tooltip("Used for ModifyTriggerCount, ForceTrigger, GrantAbility, or Counter (What to block?)")]
-    public AbilityTrigger metaTriggerType;
-    
-    [Tooltip("The Ability Asset to grant when using 'GrantAbility' effect")]
-    public AbilityData abilityToGrant; 
-
     [Header("Chaining")]
     [Tooltip("Optional: Trigger another ability immediately after this one.")]
     public AbilityData chainedAbility;
+    [Tooltip("Grant this ability to the target.")]
+    public AbilityData abilityToGrant; 
 
     [Header("Persistence")]
     [Tooltip("Does this effect persist after combat ends?")]
@@ -158,8 +171,6 @@ public class AbilityData : ScriptableObject
     [Header("Visuals")]
     public GameObject vfxPrefab;
     public AudioClip soundEffect;
-    
-    [Tooltip("Where to spawn the VFX")]
+    [Range(0f, 2f)] public float vfxDuration = 1f;
     public VFXSpawnPoint vfxSpawnPoint;
-    public float vfxDuration = 1.0f;
 }

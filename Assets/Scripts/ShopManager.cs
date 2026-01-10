@@ -41,7 +41,6 @@ public class ShopManager : MonoBehaviour
     public List<Tribe> activeTribes = new List<Tribe>();
     public int maxTribesInGame = 5;
     
-    // Tier 1: 16 copies, Tier 6: 7 copies
     private int[] poolSizeByTier = new int[] { 0, 16, 15, 13, 11, 9, 7 };
 
     void Awake() { instance = this; }
@@ -54,7 +53,6 @@ public class ShopManager : MonoBehaviour
         RerollShop();
     }
 
-    // --- INITIALIZATION ---
     void InitializeGamePool()
     {
         List<Tribe> allTribes = System.Enum.GetValues(typeof(Tribe)).Cast<Tribe>().ToList();
@@ -77,13 +75,11 @@ public class ShopManager : MonoBehaviour
         Debug.Log("Active Tribes: " + string.Join(", ", activeTribes));
     }
 
-    // --- DEBUG API ---
     public void SetPoolSizes(int[] newSizes)
     {
         if (newSizes.Length == poolSizeByTier.Length)
         {
             poolSizeByTier = newSizes;
-            Debug.Log("ShopManager: Pool Sizes Overridden by Debugger.");
         }
     }
 
@@ -91,7 +87,6 @@ public class ShopManager : MonoBehaviour
     {
         tavernTier = Mathf.Clamp(tier, 1, maxTier);
         UpdateUpgradeUI();
-        Debug.Log($"ShopManager: Force set Tier to {tavernTier}");
     }
 
     public void ModifyTribes(Tribe tribe, bool add)
@@ -99,16 +94,13 @@ public class ShopManager : MonoBehaviour
         if (add && !activeTribes.Contains(tribe))
         {
             activeTribes.Add(tribe);
-            Debug.Log($"ShopManager: Added Tribe {tribe}");
         }
         else if (!add && activeTribes.Contains(tribe))
         {
             activeTribes.Remove(tribe);
-            Debug.Log($"ShopManager: Removed Tribe {tribe}");
         }
     }
 
-    // --- FREEZE LOGIC ---
     public void ToggleFreeze()
     {
         isFrozen = !isFrozen;
@@ -158,7 +150,6 @@ public class ShopManager : MonoBehaviour
         if (freezeButtonText != null) freezeButtonText.text = isFrozen ? frozenString : normalString;
     }
 
-    // --- REFRESH LOGIC ---
     public void HandleTurnStartRefresh()
     {
         if (isFrozen)
@@ -166,7 +157,7 @@ public class ShopManager : MonoBehaviour
             isFrozen = false;
             ClearFreezeVisuals();
             UpdateFreezeUI();
-            GenerateCards(); // Refill empty slots
+            GenerateCards(); 
             return;
         }
 
@@ -203,7 +194,6 @@ public class ShopManager : MonoBehaviour
         if (GameManager.instance.TrySpendGold(rerollCost))
         {
             GameManager.instance.LogAction("Rerolled Shop");
-            if (AnalyticsManager.instance != null) AnalyticsManager.instance.TrackReroll(tavernTier);
             RerollShop();
         }
     }
@@ -248,7 +238,6 @@ public class ShopManager : MonoBehaviour
         shopContainer.DetachChildren(); 
     }
 
-    // --- POOL & GENERATION LOGIC ---
     void GenerateCards()
     {
         int targetSize = 3;
@@ -288,24 +277,10 @@ public class ShopManager : MonoBehaviour
     List<UnitData> BuildWeightedPool()
     {
         List<UnitData> pool = new List<UnitData>();
-        Dictionary<UnitData, int> globalUsage = new Dictionary<UnitData, int>();
         
-        CountUnitsInHierarchy(GameManager.instance.playerBoard, globalUsage);
-        CountUnitsInHierarchy(GameManager.instance.playerHand, globalUsage);
-        
-        if (LobbyManager.instance != null)
-        {
-            foreach (var bot in LobbyManager.instance.opponents)
-            {
-                if (bot.roster == null) continue;
-                foreach (UnitData u in bot.roster)
-                {
-                    if (u == null) continue;
-                    if (!globalUsage.ContainsKey(u)) globalUsage[u] = 0;
-                    globalUsage[u] += 1; 
-                }
-            }
-        }
+        Dictionary<string, int> playerHeld = new Dictionary<string, int>();
+        CountUnitsInHierarchy(GameManager.instance.playerBoard, playerHeld);
+        CountUnitsInHierarchy(GameManager.instance.playerHand, playerHeld);
 
         foreach (UnitData u in availableUnits)
         {
@@ -315,8 +290,18 @@ public class ShopManager : MonoBehaviour
             int maxCopies = 15; 
             if (u.tier < poolSizeByTier.Length) maxCopies = poolSizeByTier[u.tier];
 
-            int used = globalUsage.ContainsKey(u) ? globalUsage[u] : 0;
-            int remaining = Mathf.Max(0, maxCopies - used);
+            int heldByPlayer = playerHeld.ContainsKey(u.id) ? playerHeld[u.id] : 0;
+            
+            float heldByAI = 0;
+            if (LobbyManager.instance != null && LobbyManager.instance.aiPoolUsage.ContainsKey(u.id))
+            {
+                heldByAI = LobbyManager.instance.aiPoolUsage[u.id];
+            }
+
+            int remaining = Mathf.FloorToInt(maxCopies - heldByPlayer - heldByAI);
+            
+            // FIX: Prevent pool starvation by enforcing minimum of 1 for non-Golden logic (soft pool)
+            remaining = Mathf.Max(1, remaining);
 
             for (int k = 0; k < remaining; k++) pool.Add(u);
         }
@@ -324,7 +309,7 @@ public class ShopManager : MonoBehaviour
         return pool;
     }
 
-    void CountUnitsInHierarchy(Transform parent, Dictionary<UnitData, int> counts)
+    void CountUnitsInHierarchy(Transform parent, Dictionary<string, int> counts)
     {
         if (parent == null) return;
         foreach (Transform child in parent)
@@ -332,9 +317,9 @@ public class ShopManager : MonoBehaviour
             CardDisplay cd = child.GetComponent<CardDisplay>();
             if (cd != null && cd.unitData != null)
             {
-                if (!counts.ContainsKey(cd.unitData)) counts[cd.unitData] = 0;
+                if (!counts.ContainsKey(cd.unitData.id)) counts[cd.unitData.id] = 0;
                 int value = cd.isGolden ? 3 : 1;
-                counts[cd.unitData] += value;
+                counts[cd.unitData.id] += value;
             }
         }
     }

@@ -21,7 +21,7 @@ MonoBehaviour:
   baseAttack: 1
   baseHealth: 2
   tribe: 3
-  hasTaunt: 1
+  hasTaunt: 0
   hasDivineShield: 0
   hasReborn: 1
   hasStealth: 0

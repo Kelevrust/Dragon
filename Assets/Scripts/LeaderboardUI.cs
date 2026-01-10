@@ -74,8 +74,8 @@ public class LeaderboardUI : MonoBehaviour
 
         // Group units by Tribe, filter out None, sort by count descending
         var tribeGroup = bot.roster
-            .Where(u => u != null && u.tribe != Tribe.None)
-            .GroupBy(u => u.tribe)
+            .Where(u => u.template != null && u.template.tribe != Tribe.None)
+            .GroupBy(u => u.template.tribe)
             .OrderByDescending(g => g.Count())
             .FirstOrDefault();
 
@@ -83,7 +83,7 @@ public class LeaderboardUI : MonoBehaviour
         {
             return $"Build: {tribeGroup.Key} ({tribeGroup.Count()})";
         }
-        
+
         return "Build: Mixed";
     }
 

@@ -12,19 +12,23 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f939aad67108ef74b9bc26b9d4d97274, type: 3}
   m_Name: CorpseRatDeathrattle
   m_EditorClassIdentifier: Assembly-CSharp::AbilityData
-  id: 
-  name: 
-  description: 
   triggerType: 1
+  metaTriggerType: 0
   targetType: 0
-  effectType: 1
+  effectType: 2
+  chainedAbility: {fileID: 0}
+  abilityToGrant: {fileID: 0}
+  duration: 0
   scalingType: 0
   targetTribe: 0
-  valueX: 0
-  valueY: 1
+  targetUnitFilter: {fileID: 0}
+  valueX: 1
+  valueY: 0
   tokenUnit: {fileID: 11400000, guid: 3b69d9879dc1148409d8b35f610163fe, type: 2}
   keywordToGive: 0
+  consumeAbsorbsAbilities: 0
+  consumeAbsorbsAbilitiesIfGolden: 0
   vfxPrefab: {fileID: 0}
   soundEffect: {fileID: 0}
-  vfxSpawnPoint: 0
   vfxDuration: 2
+  vfxSpawnPoint: 0

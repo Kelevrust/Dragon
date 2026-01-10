@@ -5823,6 +5823,7 @@ MonoBehaviour:
     heroName: 
     health: 0
     isDead: 0
+    isGhost: 0
     lastDamageTaken: 0
     mmr: 0
     rank: 
@@ -5830,6 +5831,7 @@ MonoBehaviour:
     gold: 0
     tavernTier: 0
     roster: []
+    hand: []
 --- !u!4 &1231775255
 Transform:
   m_ObjectHideFlags: 0
@@ -8155,6 +8157,7 @@ MonoBehaviour:
   playAgainButton: {fileID: 1832188141}
   exhaustionLevel: 0
   failureCount: 0
+  hasCheatedDeath: 0
 --- !u!4 &1892088843
 Transform:
   m_ObjectHideFlags: 0
