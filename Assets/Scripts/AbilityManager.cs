@@ -411,16 +411,30 @@ public class AbilityManager : MonoBehaviour
                 {
                     // FIX: Passive Auras must NEVER trigger Permanent stats, or they scale infinitely on Recalculate
                     bool isPermanent = ability.duration == BuffDuration.Permanent && ability.triggerType != AbilityTrigger.PassiveAura;
-                    
+
                     if (isPermanent)
                     {
                         target.permanentAttack += finalX;
                         target.permanentHealth += finalY;
                     }
-                    
+
                     target.currentAttack += finalX;
                     target.currentHealth += finalY;
                     target.UpdateVisuals();
+                }
+                break;
+
+            case AbilityEffect.DealDamage:
+                if (target != null)
+                {
+                    int damage = finalX; // valueX is the damage amount
+                    target.TakeDamage(damage);
+
+                    // Check if target died from damage
+                    if (target.currentHealth <= 0 && CombatManager.instance != null)
+                    {
+                        CombatManager.instance.HandleDeath(target);
+                    }
                 }
                 break;
 
@@ -719,6 +733,42 @@ public class AbilityManager : MonoBehaviour
                 if (validRandom.Count > 0) targets.Add(validRandom[Random.Range(0, validRandom.Count)]);
                 break;
             case AbilityTarget.AllFriendly: targets.AddRange(allies); break;
+
+            case AbilityTarget.RandomEnemy:
+            case AbilityTarget.AllEnemy:
+                {
+                    // Find enemy board
+                    Transform enemyBoard = null;
+                    if (source != null && source.transform.parent != null)
+                    {
+                        Transform myBoard = source.transform.parent;
+                        if (GameManager.instance != null && myBoard == GameManager.instance.playerBoard)
+                            enemyBoard = CombatManager.instance != null ? CombatManager.instance.enemyBoard : null;
+                        else if (CombatManager.instance != null && myBoard == CombatManager.instance.enemyBoard)
+                            enemyBoard = GameManager.instance.playerBoard;
+                    }
+
+                    if (enemyBoard != null)
+                    {
+                        List<CardDisplay> enemies = new List<CardDisplay>();
+                        foreach (Transform child in enemyBoard)
+                        {
+                            if (child == null) continue;
+                            CardDisplay enemy = child.GetComponent<CardDisplay>();
+                            if (enemy != null && enemy.gameObject.activeInHierarchy) enemies.Add(enemy);
+                        }
+
+                        if (ability.targetType == AbilityTarget.RandomEnemy && enemies.Count > 0)
+                        {
+                            targets.Add(enemies[Random.Range(0, enemies.Count)]);
+                        }
+                        else if (ability.targetType == AbilityTarget.AllEnemy)
+                        {
+                            targets.AddRange(enemies);
+                        }
+                    }
+                }
+                break;
             
             case AbilityTarget.AdjacentFriendly:
             {

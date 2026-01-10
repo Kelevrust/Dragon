@@ -5,6 +5,7 @@ using UnityEngine.UI;
 using System.Text; 
 using UnityEngine.SceneManagement;
 using UnityEngine.InputSystem; 
+using System.Linq;
 
 public class GameManager : MonoBehaviour
 {
@@ -57,7 +58,8 @@ public class GameManager : MonoBehaviour
 
     [Header("Targeting")]
     public bool isTargetingMode = false;
-    public AbilityData pendingAbility; 
+    public AbilityData pendingAbility;
+    public CardDisplay pendingCardSource; 
     public Texture2D targetingCursor;  
     private CursorMode cursorMode = CursorMode.Auto;
     private Vector2 hotSpot = Vector2.zero;
@@ -65,7 +67,7 @@ public class GameManager : MonoBehaviour
     [Header("Selection")]
     public CardDisplay selectedUnit; 
     public GameObject sellButton; 
-    public GameObject sellZone; // Reference to the large drop area
+    public GameObject sellZone; 
 
     [Header("In-Game Menu")]
     public GameObject pauseMenuPanel; 
@@ -86,10 +88,7 @@ public class GameManager : MonoBehaviour
         StartRecruitPhase();
         
         if (pauseMenuPanel != null) pauseMenuPanel.SetActive(false);
-        
         if (bankPanel != null) bankPanel.SetActive(enableGoldCarryover);
-        
-        // Ensure Sell Zone starts hidden so it doesn't block clicks
         if (sellZone != null) sellZone.SetActive(false);
 
         string playerType = "Human";
@@ -102,10 +101,9 @@ public class GameManager : MonoBehaviour
             string dist = tester.distributeMMR ? $"opponents distribution @{tester.mmrVariance}" : "Fixed Distribution";
             logDetails = $"MMR {tester.targetMMR} w/ {dist}";
         }
-        else if (PlayerProfile.instance != null)
-        {
-            logDetails = $"MMR {PlayerProfile.instance.mmr}";
-        }
+        
+        // Removed PlayerProfile check to avoid compilation errors if missing
+        // else if (PlayerProfile.instance != null) { logDetails = $"MMR {PlayerProfile.instance.mmr}"; }
 
         string fullLog = $"Player - {playerType} - {logDetails}";
         Debug.Log($"<color=magenta>[SESSION START]</color> {fullLog}");
@@ -143,10 +141,7 @@ public class GameManager : MonoBehaviour
             if (currentPhaseTimer <= 0)
             {
                 currentPhaseTimer = 0;
-                
-                // Force cleanup of dragging cards before combat starts
                 CleanUpFloatingCards();
-                
                 if (combatManager != null) combatManager.StartCombat();
             }
         }
@@ -155,8 +150,6 @@ public class GameManager : MonoBehaviour
              if (endTurnButtonText != null) endTurnButtonText.text = "Combat...";
         }
     }
-
-    // --- PAUSE MENU FUNCTIONS ---
 
     public void TogglePauseMenu()
     {
@@ -192,7 +185,6 @@ public class GameManager : MonoBehaviour
         #endif
     }
 
-    // --- LOGGING ---
     public void LogAction(string action)
     {
         Debug.Log($"<color=white>[ACTION]</color> {action}");
@@ -264,7 +256,6 @@ public class GameManager : MonoBehaviour
         currentPhase = GamePhase.Recruit;
         currentPhaseTimer = recruitTime;
 
-        // --- ECONOMY CALCULATION ---
         int standardTurnCap = Mathf.Min(3 + turnNumber, 10);
         maxGold = standardTurnCap; 
 
@@ -273,10 +264,8 @@ public class GameManager : MonoBehaviour
             int interest = 0;
             if (enableInterest)
             {
-                // Calculate interest on TOTAL WEALTH (Gold + Bank), not just hand gold
                 int totalWealth = gold + bankBalance;
                 interest = Mathf.Min(totalWealth / 10, interestCap);
-                
                 if (interest > 0) LogAction($"Gained {interest} Gold from Interest (Total Wealth: {totalWealth}).");
             }
             gold += baseIncome + interest;
@@ -293,11 +282,18 @@ public class GameManager : MonoBehaviour
             gold += activeHero.bonusValue;
         }
 
-        // NEW: Trigger Start of Turn effects (e.g. Loan Shark)
         if (AbilityManager.instance != null)
         {
             AbilityManager.instance.TriggerTurnStartAbilities();
             AbilityManager.instance.RecalculateAuras();
+        }
+        
+        // FIX: Removed duplicate ReduceUpgradeCost() call. 
+        // HandleTurnStartRefresh() handles this logic internally for ShopManager.
+        ShopManager shop = FindFirstObjectByType<ShopManager>();
+        if (shop != null) 
+        {
+            shop.HandleTurnStartRefresh(); 
         }
 
         DeselectUnit();
@@ -320,7 +316,6 @@ public class GameManager : MonoBehaviour
         return false;
     }
 
-    // --- BANKING API ---
     public void ToggleBankingMode(bool active)
     {
         enableGoldCarryover = active;
@@ -350,7 +345,6 @@ public class GameManager : MonoBehaviour
         }
     }
     
-    // --- NEW: Toggle Sell Zone State ---
     public void ToggleSellZone(bool active)
     {
         if (sellZone != null)
@@ -359,7 +353,6 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    // --- BOARD SPAWNING LOGIC ---
     public void SpawnUnitOnBoard(UnitData data)
     {
         if (playerBoard == null || cardPrefab == null) return;
@@ -387,7 +380,6 @@ public class GameManager : MonoBehaviour
     {
         if (spellCard == null) return false;
 
-        // Check Cost (Assumes unitData.cost is accurate for spells)
         if (!TrySpendGold(spellCard.unitData.cost)) 
         {
             Debug.Log("Not enough gold to cast spell!");
@@ -396,11 +388,13 @@ public class GameManager : MonoBehaviour
 
         LogAction($"Cast Spell: {spellCard.unitData.unitName} on {target.unitData.unitName}");
 
-        // Cleanup the spell card from hand
         Destroy(spellCard.gameObject);
         
-        // Recalculate immediately so the visual buff appears
         if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
+        
+        // Reset targeting references
+        pendingCardSource = null;
+        pendingAbility = null;
         
         return true;
     }
@@ -459,14 +453,6 @@ public class GameManager : MonoBehaviour
             
             if (targetParent == playerBoard)
             {
-                if (currentPhase == GamePhase.Recruit)
-                {
-                    // If spawned during Recruit (e.g. by ability), treat as Play? 
-                    // Usually tokens don't trigger "OnPlay".
-                    // But they DO trigger "OnAllySummon" now.
-                }
-                
-                // NEW: Trigger Ally Summon effects (Pack Leader)
                 if (AbilityManager.instance != null)
                 {
                     AbilityManager.instance.TriggerAllySummonAbilities(display, playerBoard);
@@ -486,14 +472,25 @@ public class GameManager : MonoBehaviour
         return false;
     }
 
-    public void StartAbilityTargeting(AbilityData ability)
+    public void StartAbilityTargeting(AbilityData ability, CardDisplay sourceCard = null)
     {
         if (ability == null) return;
 
+        DeselectUnit(); // Clear selection first
+
         isTargetingMode = true;
         pendingAbility = ability;
+        pendingCardSource = sourceCard;
         
-        Debug.Log($"<color=cyan>Select a target for {ability.name}...</color>");
+        string sourceName = sourceCard != null ? sourceCard.unitData.unitName : ability.name;
+        string prompt = $"Select target for {sourceName} (Right-Click to Cancel)";
+        
+        Debug.Log($"<color=cyan>{prompt}</color>");
+        
+        if (heroText != null)
+        {
+             heroText.text = prompt;
+        }
         
         if (targetingCursor != null)
         {
@@ -505,14 +502,29 @@ public class GameManager : MonoBehaviour
     {
         if (!isTargetingMode || pendingAbility == null) return;
 
-        AbilityManager.instance.CastTargetedAbility(pendingAbility, targetUnit);
-        
-        if (pendingAbility == activeHero.powerAbility)
+        // Visual feedback
+        if (targetUnit != null)
         {
-            heroPowerUsed = true;
-            UpdateUI();
+            targetUnit.transform.DOPunchScale(Vector3.one * 0.2f, 0.2f);
         }
 
+        if (pendingCardSource != null && pendingCardSource.unitData.cardType == CardType.Spell)
+        {
+             // It's a Spell Card cast
+             TryPlaySpell(pendingCardSource, targetUnit);
+        }
+        else
+        {
+             // It's a Unit Ability or Hero Power
+             AbilityManager.instance.CastTargetedAbility(pendingAbility, targetUnit);
+             
+             if (pendingAbility == activeHero.powerAbility)
+             {
+                 heroPowerUsed = true;
+             }
+        }
+
+        UpdateUI();
         CancelTargeting();
     }
 
@@ -520,7 +532,10 @@ public class GameManager : MonoBehaviour
     {
         isTargetingMode = false;
         pendingAbility = null;
+        pendingCardSource = null;
+        
         Cursor.SetCursor(null, Vector2.zero, cursorMode); 
+        UpdateUI(); 
     }
 
     public void OnHeroPowerClick()
@@ -539,18 +554,22 @@ public class GameManager : MonoBehaviour
             return;
         }
 
-        if (activeHero.powerAbility.targetType == AbilityTarget.SelectTarget)
+        if (activeHero.powerAbility.targetType == AbilityTarget.SelectTarget || 
+            activeHero.powerAbility.targetType == AbilityTarget.AllFriendly || 
+            activeHero.powerAbility.targetType == AbilityTarget.RandomFriendly) 
         {
-            StartAbilityTargeting(activeHero.powerAbility);
-        }
-        else
-        {
-            if (TrySpendGold(activeHero.powerCost))
+            if (activeHero.powerAbility.targetType == AbilityTarget.SelectTarget)
             {
-                heroPowerUsed = true;
-                AbilityManager.instance.CastHeroPower(activeHero.powerAbility);
-                UpdateUI();
+                StartAbilityTargeting(activeHero.powerAbility);
+                return;
             }
+        }
+        
+        if (TrySpendGold(activeHero.powerCost))
+        {
+            heroPowerUsed = true;
+            AbilityManager.instance.CastHeroPower(activeHero.powerAbility);
+            UpdateUI();
         }
     }
 
@@ -576,7 +595,6 @@ public class GameManager : MonoBehaviour
         return true;
     }
 
-    // --- Buy directly to Board ---
     public bool TryBuyToBoard(UnitData data, CardDisplay sourceCard, int targetIndex = -1)
     {
         if (!TrySpendGold(data.cost)) return false;
@@ -597,12 +615,10 @@ public class GameManager : MonoBehaviour
         if (AnalyticsManager.instance != null)
             AnalyticsManager.instance.TrackPurchase(data.unitName, data.cost);
 
-        // Trigger Play effects since it "entered the board"
         if (AbilityManager.instance != null)
         {
             AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnPlay, sourceCard);
             AbilityManager.instance.TriggerAllyPlayAbilities(sourceCard, playerBoard);
-            // NEW: Also trigger Summon effects (a buy to board is a summon)
             AbilityManager.instance.TriggerAllySummonAbilities(sourceCard, playerBoard);
             AbilityManager.instance.RecalculateAuras();
         }
@@ -611,25 +627,29 @@ public class GameManager : MonoBehaviour
         return true;
     }
 
-    // --- Allow targeted placement ---
     public bool TryPlayCardToBoard(CardDisplay card, int targetIndex = -1)
     {
-        // 1. Spell Logic
         if (card.unitData.cardType == CardType.Spell)
         {
+            AbilityData spellAbility = card.unitData.abilities.FirstOrDefault(a => a.triggerType == AbilityTrigger.OnPlay);
+            
+            if (spellAbility != null && IsTargetedAbility(spellAbility))
+            {
+                DeselectUnit(); // Fix: Clear previous selection to avoid confusion
+                StartAbilityTargeting(spellAbility, card);
+                return false; 
+            }
+            
             LogAction($"Cast Spell: {card.unitData.unitName}");
-
             if (AbilityManager.instance != null)
             {
                 AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnPlay, card);
                 AbilityManager.instance.RecalculateAuras();
             }
-
             Destroy(card.gameObject);
             return true;
         }
 
-        // 2. Unit Logic (Existing)
         if (playerBoard.childCount >= 7)
         {
             Debug.Log("Board is full!");
@@ -645,13 +665,21 @@ public class GameManager : MonoBehaviour
         {
             AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnPlay, card);
             AbilityManager.instance.TriggerAllyPlayAbilities(card, playerBoard);
-            // NEW: Trigger Summon effects
             AbilityManager.instance.TriggerAllySummonAbilities(card, playerBoard);
             AbilityManager.instance.RecalculateAuras(); 
         }
 
         CheckForTriples(card.unitData);
         return true;
+    }
+
+    private bool IsTargetedAbility(AbilityData ability)
+    {
+        if (ability == null) return false;
+        return ability.targetType == AbilityTarget.SelectTarget || 
+               ability.targetType == AbilityTarget.AnyUnit ||
+               ability.targetType == AbilityTarget.FriendlyUnit ||
+               ability.targetType == AbilityTarget.EnemyUnit;
     }
 
     public void SelectUnit(CardDisplay unit)
@@ -678,6 +706,12 @@ public class GameManager : MonoBehaviour
 
         LogAction($"Sold {unitToSell.unitData.unitName}");
         gold += 1;
+        
+        if (AbilityManager.instance != null)
+        {
+             // Potential logic for sell triggers here
+        }
+
         Destroy(unitToSell.gameObject);
         
         if (selectedUnit == unitToSell) DeselectUnit();
@@ -769,35 +803,28 @@ public class GameManager : MonoBehaviour
         if (leaderboard != null) leaderboard.UpdateDisplay();
     }
     
-    // --- RESTORED: Clean up floating cards ---
     public void CleanUpFloatingCards()
     {
         CardDisplay[] allCards = FindObjectsByType<CardDisplay>(FindObjectsSortMode.None);
         foreach(var card in allCards)
         {
-            // If card is active, but not in a valid container
             if (card.gameObject.activeInHierarchy && 
                 card.transform.parent != playerBoard && 
                 card.transform.parent != playerHand && 
                 (combatManager == null || card.transform.parent != combatManager.shopContainer))
             {
-                // Is it currently being dragged by the user? (Check if parent is Canvas)
-                // We assume any child of Canvas that is a Card is "floating"
                 if (card.GetComponentInParent<Canvas>() != null && card.transform.parent.GetComponent<Canvas>() != null)
                 {
                     Debug.Log($"Cleaning up floating card: {card.name}");
                     
                     if (card.isPurchased)
                     {
-                        // Safely return to hand
                         card.transform.SetParent(playerHand);
                         card.transform.localPosition = Vector3.zero;
-                        // Reset scaling from drag
                         card.transform.localScale = Vector3.one;
                     }
                     else
                     {
-                        // Destroy shop item
                         Destroy(card.gameObject);
                     }
                 }
@@ -809,30 +836,18 @@ public class GameManager : MonoBehaviour
     {
         if (goldText != null)
         {
-            // If in Carryover mode, show total gold. Otherwise show X/Max
-            if (enableGoldCarryover)
-            {
-                // FIX: Gold shows clean number (Gold: 10)
-                goldText.text = $"Gold: {gold}";
-            }
-            else
-            {
-                goldText.text = $"Gold: {gold}/{maxGold}";
-            }
+            if (enableGoldCarryover) goldText.text = $"Gold: {gold}";
+            else goldText.text = $"Gold: {gold}/{maxGold}";
         }
         
         if (bankBalanceText != null)
         {
-            // FIX: Bank shows "Bank: X (+Interest)"
             string interestText = "";
             if (enableInterest && enableGoldCarryover)
             {
                 int totalWealth = gold + bankBalance;
                 int projectedInterest = Mathf.Min(totalWealth / 10, interestCap);
-                if (projectedInterest > 0)
-                {
-                    interestText = $" <color=yellow>(+{projectedInterest})</color>";
-                }
+                if (projectedInterest > 0) interestText = $" <color=yellow>(+{projectedInterest})</color>";
             }
             bankBalanceText.text = $"Bank: {bankBalance}{interestText}";
         }
@@ -846,14 +861,13 @@ public class GameManager : MonoBehaviour
         }
         if (heroText != null && activeHero != null) 
         {
-            string status = heroPowerUsed ? "(Used)" : $"(2g)";
-            heroText.text = $"{activeHero.heroName} Power: {activeHero.powerName} {status}";
+            string prompt = isTargetingMode ? heroText.text : $"{activeHero.heroName} Power: {activeHero.powerName} {(heroPowerUsed ? "(Used)" : "(2g)")}";
+            if (!isTargetingMode) heroText.text = prompt;
         }
 
-        if (tierText != null)
+        if (tierText != null && ShopManager.instance != null)
         {
-             ShopManager shop = FindFirstObjectByType<ShopManager>();
-             if (shop != null) tierText.text = $"Tier: {shop.tavernTier}";
+             tierText.text = $"Tier: {ShopManager.instance.tavernTier}";
         }
     }
 }

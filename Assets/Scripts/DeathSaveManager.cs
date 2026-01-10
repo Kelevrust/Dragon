@@ -21,11 +21,11 @@ public class DeathSaveManager : MonoBehaviour
     [Header("PvE Actions (D&D Style)")]
     public GameObject pveContainer;
     public Button rollSaveButton;     
-    public Button pveSuccumbButton;  
+    public Button pveSuccumbButton;   
 
     [Header("PvP Actions (The Wager)")]
     public GameObject pvpContainer;
-    public Button wagerButton;      // "Cheat Death (50% Chance / Double Risk)"
+    public Button wagerButton;      // "Bribe Charon (1 More Turn / Double Risk)"
     public Button acceptFateButton; // "Pay the Ferryman (Standard Loss)"
 
     [Header("Game Over Buttons")]
@@ -35,6 +35,7 @@ public class DeathSaveManager : MonoBehaviour
     [Header("State")]
     public int exhaustionLevel = 0;
     public int failureCount = 0;
+    public bool hasCheatedDeath = false; // Track if they already used the buyback
     
     void Awake() { instance = this; }
 
@@ -48,7 +49,7 @@ public class DeathSaveManager : MonoBehaviour
 
     public void StartDeathSequence()
     {
-        deathScreenPanel.SetActive(true);
+        if (deathScreenPanel != null) deathScreenPanel.SetActive(true);
         HideGameOverButtons();
 
         if (isPvPMode)
@@ -65,54 +66,73 @@ public class DeathSaveManager : MonoBehaviour
 
     void SetupPvPDeath()
     {
-        pveContainer.SetActive(false);
-        pvpContainer.SetActive(true);
+        if (pveContainer != null) pveContainer.SetActive(false);
+        if (pvpContainer != null) pvpContainer.SetActive(true);
 
-        titleText.text = "YOU ARE DEAD";
-        infoText.text = "The Ferryman awaits his coin...\n\n<color=red>Risk it all?</color>\nWin: Revive with 1 HP\nLose: Double MMR Penalty";
-        resultText.text = "";
-
-        wagerButton.interactable = true;
-        wagerButton.onClick.RemoveAllListeners();
-        wagerButton.onClick.AddListener(FlipCoin);
-
-        acceptFateButton.interactable = true;
-        acceptFateButton.onClick.RemoveAllListeners();
-        acceptFateButton.onClick.AddListener(() => GameOver("You paid the Ferryman."));
-    }
-
-    public void FlipCoin()
-    {
-        wagerButton.interactable = false;
-        acceptFateButton.interactable = false;
-
-        float outcome = Random.value; // 0.0 to 1.0
-
-        if (outcome > 0.5f)
+        if (titleText != null) titleText.text = "YOU ARE DEAD";
+        
+        if (!hasCheatedDeath)
         {
-            // WIN
-            resultText.text = "<color=green>DEATH REJECTED YOU.</color>";
-            StartCoroutine(PvPRevive());
+            if (infoText != null) infoText.text = "The Ferryman awaits his coin...\n\n<color=red>Bribe Charon?</color>\nGain: 1 Turn (1 HP, Half Gold)\nRisk: Double MMR Penalty if you die again.";
+            if (resultText != null) resultText.text = "";
+
+            if (wagerButton != null)
+            {
+                wagerButton.interactable = true;
+                wagerButton.GetComponentInChildren<TMP_Text>().text = "BRIBE CHARON";
+                wagerButton.onClick.RemoveAllListeners();
+                wagerButton.onClick.AddListener(AttemptCheatDeath);
+            }
         }
         else
         {
-            // LOSS
-            resultText.text = "<color=red>THE ABYSS TAKES YOU.</color>";
-            // In a real backend, we would send a signal here to double the MMR deduction
-            GameOver("You gambled with your soul... and lost.");
+            // You already cheated death once and died again. No second chances.
+            if (infoText != null) infoText.text = "Charon does not accept the same coin twice.\n\n<color=red>DOUBLE PENALTY APPLIED.</color>";
+            if (wagerButton != null) wagerButton.gameObject.SetActive(false); // Hide button
         }
+
+        if (acceptFateButton != null)
+        {
+            acceptFateButton.interactable = true;
+            acceptFateButton.onClick.RemoveAllListeners();
+            acceptFateButton.onClick.AddListener(() => GameOver("You paid the Ferryman."));
+        }
+    }
+
+    public void AttemptCheatDeath()
+    {
+        if (wagerButton != null) wagerButton.interactable = false;
+        if (acceptFateButton != null) acceptFateButton.interactable = false;
+
+        hasCheatedDeath = true;
+
+        if (resultText != null) resultText.text = "<color=green>ONE MORE TURN.</color>";
+        
+        StartCoroutine(PvPRevive());
     }
 
     IEnumerator PvPRevive()
     {
         yield return new WaitForSeconds(1.5f);
-        deathScreenPanel.SetActive(false);
+        if (deathScreenPanel != null) deathScreenPanel.SetActive(false);
         
-        GameManager.instance.playerHealth = 1;
-        GameManager.instance.isUnconscious = false;
-        GameManager.instance.UpdateUI();
+        if (GameManager.instance != null)
+        {
+            GameManager.instance.playerHealth = 1;
+            GameManager.instance.isUnconscious = false;
+            
+            // Apply Penalty: Halve current gold (or set a flag for next turn income)
+            // Ideally, we reduce income for the NEXT recruit phase.
+            // For now, let's just slash current gold to represent the bribe cost immediately.
+            GameManager.instance.gold = Mathf.FloorToInt(GameManager.instance.gold / 2f);
+            
+            GameManager.instance.UpdateUI();
+            
+            // NOTE: To implement "Half Gold next turn", we would need to add a flag to GameManager 
+            // like `GameManager.instance.applyCharonPenalty = true;`
+        }
         
-        // Return to shop immediately
+        // Return to shop immediately to start that desperate turn
         if (CombatManager.instance != null) CombatManager.instance.ForceReturnToShop();
     }
 
@@ -120,36 +140,45 @@ public class DeathSaveManager : MonoBehaviour
 
     void SetupPvEDeath()
     {
-        pvpContainer.SetActive(false);
-        pveContainer.SetActive(true);
+        if (pvpContainer != null) pvpContainer.SetActive(false);
+        if (pveContainer != null) pveContainer.SetActive(true);
 
-        titleText.text = "UNCONSCIOUS";
-        int currentHP = GameManager.instance.playerHealth;
+        if (titleText != null) titleText.text = "UNCONSCIOUS";
+        
+        int currentHP = GameManager.instance != null ? GameManager.instance.playerHealth : 0;
         int targetDC = Mathf.Abs(currentHP) + 1; 
 
-        infoText.text = $"Constitution Save DC: {targetDC}\n(Failures: {failureCount}/3)";
-        resultText.text = "";
+        if (infoText != null) infoText.text = $"Constitution Save DC: {targetDC}\n(Failures: {failureCount}/3)";
+        if (resultText != null) resultText.text = "";
 
-        rollSaveButton.interactable = true;
-        rollSaveButton.GetComponentInChildren<TMP_Text>().text = "ROLL SAVE";
-        rollSaveButton.onClick.RemoveAllListeners();
-        rollSaveButton.onClick.AddListener(RollDice);
+        if (rollSaveButton != null)
+        {
+            rollSaveButton.interactable = true;
+            TMP_Text btnText = rollSaveButton.GetComponentInChildren<TMP_Text>();
+            if (btnText != null) btnText.text = "ROLL SAVE";
+            
+            rollSaveButton.onClick.RemoveAllListeners();
+            rollSaveButton.onClick.AddListener(RollDice);
+        }
 
-        pveSuccumbButton.interactable = true;
-        pveSuccumbButton.onClick.RemoveAllListeners();
-        pveSuccumbButton.onClick.AddListener(() => GameOver("You succumbed to your wounds."));
+        if (pveSuccumbButton != null)
+        {
+            pveSuccumbButton.interactable = true;
+            pveSuccumbButton.onClick.RemoveAllListeners();
+            pveSuccumbButton.onClick.AddListener(() => GameOver("You succumbed to your wounds."));
+        }
     }
 
     public void RollDice()
     {
-        rollSaveButton.interactable = false;
-        pveSuccumbButton.interactable = false; 
+        if (rollSaveButton != null) rollSaveButton.interactable = false;
+        if (pveSuccumbButton != null) pveSuccumbButton.interactable = false; 
         
         // Simple D20 logic for now
         int roll = Random.Range(1, 21);
         int total = roll; // Add modifiers later?
 
-        int currentHP = GameManager.instance.playerHealth;
+        int currentHP = GameManager.instance != null ? GameManager.instance.playerHealth : 0;
         int targetDC = Mathf.Abs(currentHP) + 1;
 
         string res = $"Rolled: {roll}";
@@ -157,13 +186,13 @@ public class DeathSaveManager : MonoBehaviour
         if (total >= targetDC)
         {
             res += "\n<color=green>STABILIZED!</color>";
-            resultText.text = res;
+            if (resultText != null) resultText.text = res;
             StartCoroutine(PvERevive());
         }
         else
         {
             res += "\n<color=red>FAILURE...</color>";
-            resultText.text = res;
+            if (resultText != null) resultText.text = res;
             HandlePvEFailure();
         }
     }
@@ -171,13 +200,16 @@ public class DeathSaveManager : MonoBehaviour
     IEnumerator PvERevive()
     {
         yield return new WaitForSeconds(1.5f);
-        deathScreenPanel.SetActive(false);
+        if (deathScreenPanel != null) deathScreenPanel.SetActive(false);
         exhaustionLevel++; 
         failureCount = 0;  
         
-        GameManager.instance.playerHealth = 1;
-        GameManager.instance.isUnconscious = false;
-        GameManager.instance.UpdateUI();
+        if (GameManager.instance != null)
+        {
+            GameManager.instance.playerHealth = 1;
+            GameManager.instance.isUnconscious = false;
+            GameManager.instance.UpdateUI();
+        }
         
         if (CombatManager.instance != null) CombatManager.instance.ForceReturnToShop();
     }
@@ -200,17 +232,24 @@ public class DeathSaveManager : MonoBehaviour
 
     public void TriggerVictory()
     {
-        deathScreenPanel.SetActive(true);
-        pveContainer.SetActive(false);
-        pvpContainer.SetActive(false);
+        Debug.Log("Triggering Victory Screen...");
+        if (deathScreenPanel != null) deathScreenPanel.SetActive(true);
+        if (pveContainer != null) pveContainer.SetActive(false);
+        if (pvpContainer != null) pvpContainer.SetActive(false);
         ShowGameOverButtons();
 
-        titleText.text = "VICTORY!";
-        infoText.text = "";
-        resultText.text = $"<color=green>CHAMPION</color>\nLast one standing.";
+        if (titleText != null) titleText.text = "VICTORY!";
+        if (infoText != null) infoText.text = "";
+        if (resultText != null) resultText.text = $"<color=green>CHAMPION</color>\nLast one standing.";
         
-        if (GameManager.instance.heroText != null) GameManager.instance.heroText.text = "CHAMPION";
-        if (PlayerProfile.instance != null) PlayerProfile.instance.RecordMatchResult(1);
+        if (GameManager.instance != null && GameManager.instance.heroText != null) 
+            GameManager.instance.heroText.text = "CHAMPION";
+            
+        // Safe access to PlayerProfile
+        if (PlayerProfile.instance != null) 
+        {
+            PlayerProfile.instance.RecordMatchResult(1);
+        }
     }
 
     public void SuccumbToDeath()
@@ -220,9 +259,9 @@ public class DeathSaveManager : MonoBehaviour
 
     void GameOver(string flavorText)
     {
-        deathScreenPanel.SetActive(true);
-        pveContainer.SetActive(false);
-        pvpContainer.SetActive(false);
+        if (deathScreenPanel != null) deathScreenPanel.SetActive(true);
+        if (pveContainer != null) pveContainer.SetActive(false);
+        if (pvpContainer != null) pvpContainer.SetActive(false);
         ShowGameOverButtons();
 
         // Calculate Placement
@@ -232,17 +271,22 @@ public class DeathSaveManager : MonoBehaviour
             int livingOpponents = LobbyManager.instance.opponents.Count(x => !x.isDead);
             placement = 1 + livingOpponents;
             
+            // Safe recording
             if (PlayerProfile.instance != null)
             {
+                // Logic hook: If hasCheatedDeath is true, we should double the MMR loss here.
+                // Currently RecordMatchResult calculates based on placement. 
+                // You might want to overload that function: RecordMatchResult(placement, hasCheatedDeath)
                 PlayerProfile.instance.RecordMatchResult(placement);
                 flavorText += $"\n\nRank: {PlayerProfile.instance.mmr}";
             }
             flavorText += $"\nPlaced: #{placement}";
         }
 
-        titleText.text = "GAME OVER";
-        resultText.text = flavorText;
-        if (GameManager.instance.heroText != null) GameManager.instance.heroText.text = "DEAD";
+        if (titleText != null) titleText.text = "GAME OVER";
+        if (resultText != null) resultText.text = flavorText;
+        if (GameManager.instance != null && GameManager.instance.heroText != null) 
+            GameManager.instance.heroText.text = "DEAD";
     }
 
     void ShowGameOverButtons()

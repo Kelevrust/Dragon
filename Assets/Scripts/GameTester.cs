@@ -549,12 +549,11 @@ public class GameTester : MonoBehaviour
              return;
         }
         
-        // Fix: Use correct variable names from updated DeathSaveManager
         if (dsm.isPvPMode)
         {
             if (dsm.wagerButton != null && dsm.wagerButton.interactable)
             {
-                Debug.Log("Tester: Taking the Wager (Coin Flip)!");
+                Debug.Log("Tester: Taking the Wager (Attempt Cheat Death)!");
                 dsm.wagerButton.onClick.Invoke();
             }
         }

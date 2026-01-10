@@ -60,16 +60,29 @@ public class CombatManager : MonoBehaviour
         SaveRoster();
         GameManager.instance.currentPhase = GameManager.GamePhase.Combat;
         
+        // FIX: Fetch the actual opponent from the Lobby
         if (LobbyManager.instance != null)
         {
             var opponent = LobbyManager.instance.GetNextOpponent();
-            if (opponent != null) Debug.Log($"<color=orange>Fighting Opponent: {opponent.name} | {opponent.rank} ({opponent.mmr})</color>");
+            if (opponent != null) 
+            {
+                Debug.Log($"<color=orange>Fighting Opponent: {opponent.name} | {opponent.rank} ({opponent.mmr})</color>");
+                SpawnEnemies(opponent); 
+            }
+            else
+            {
+                // Fallback / Win condition logic handled by LobbyManager usually
+                Debug.LogWarning("No opponent found!");
+            }
+        }
+        else
+        {
+            // Fallback for testing without Lobby
+            SpawnEnemies(null); 
         }
 
         if (AudioManager.instance != null) AudioManager.instance.PlaySFX(combatStartClip);
 
-        SpawnEnemies(); 
-        
         // NEW: Trigger Start of Combat Abilities (e.g. Rabid Bear)
         if (AbilityManager.instance != null)
         {
@@ -116,19 +129,43 @@ public class CombatManager : MonoBehaviour
         return false;
     }
 
-    void SpawnEnemies()
+    // FIX: Updated to accept an Opponent object
+    void SpawnEnemies(LobbyManager.Opponent opponent)
     {
         foreach (Transform child in enemyBoard) Destroy(child.gameObject);
 
-        AIManager ai = AIManager.instance;
-        if (ai != null)
+        if (opponent != null)
         {
-            List<UnitData> enemyRoster = ai.GenerateEnemyBoard(GameManager.instance.turnNumber);
+            // FIX: Use the real simulation roster with buffed stats
+            foreach (LobbyManager.SavedAIUnit savedUnit in opponent.roster)
+            {
+                GameObject newCard = Instantiate(cardPrefab, enemyBoard);
+                CardDisplay cd = newCard.GetComponent<CardDisplay>();
+
+                // Set golden flag BEFORE LoadUnit so stats are correctly set
+                cd.isGolden = savedUnit.isGolden;
+                cd.LoadUnit(savedUnit.template);
+
+                // Override with saved buffed stats
+                cd.permanentAttack = savedUnit.permAttack;
+                cd.permanentHealth = savedUnit.permHealth;
+                cd.currentAttack = savedUnit.permAttack;
+                cd.currentHealth = savedUnit.permHealth;
+                cd.RefreshVisuals();
+
+                Destroy(newCard.GetComponent<UnityEngine.UI.Button>());
+            }
+        }
+        else if (AIManager.instance != null)
+        {
+            // Legacy fallback (loads base stats)
+            List<UnitData> enemyRoster = AIManager.instance.GenerateEnemyBoard(GameManager.instance.turnNumber);
             foreach (UnitData data in enemyRoster)
             {
                 GameObject newCard = Instantiate(cardPrefab, enemyBoard);
-                newCard.GetComponent<CardDisplay>().LoadUnit(data);
-                Destroy(newCard.GetComponent<UnityEngine.UI.Button>()); 
+                CardDisplay cd = newCard.GetComponent<CardDisplay>();
+                cd.LoadUnit(data);
+                Destroy(newCard.GetComponent<UnityEngine.UI.Button>());
             }
         }
     }
@@ -252,45 +289,43 @@ public class CombatManager : MonoBehaviour
         return validDefenders[Random.Range(0, validDefenders.Count)];
     }
 
-    // UPDATED: Now Public for AbilityManager to access (Rush/Snipes)
     public void HandleDeath(CardDisplay unit)
+{
+    if (unit == null) return;
+    
+    if (!unit.gameObject.activeInHierarchy) return;
+
+    if (unit.hasReborn)
     {
-        if (unit == null) return;
-        
-        // Prevent double-death processing
-        if (!unit.gameObject.activeInHierarchy) return;
-
-        if (unit.hasReborn)
-        {
-            Debug.Log($"{unit.unitData.unitName} Reborn triggered!");
-            unit.hasReborn = false;
-            unit.currentHealth = 1;
-            unit.UpdateVisuals();
-            return;
-        }
-
-        if (AudioManager.instance != null) AudioManager.instance.PlaySFX(deathClip);
-
-        Transform oldBoard = unit.transform.parent;
-
-        if (graveyard != null) unit.transform.SetParent(graveyard);
-        unit.gameObject.SetActive(false); 
-
-        // Trigger Deathrattles
-        if (AbilityManager.instance != null)
-        {
-            try 
-            { 
-                AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnDeath, unit, oldBoard); 
-                AbilityManager.instance.TriggerAllyDeathAbilities(unit, oldBoard);
-            }
-            catch (System.Exception e) { Debug.LogError($"Deathrattle error: {e.Message}"); }
-        }
-        
-        // Note: We do not Destroy immediatey if we want to support resurrection later, 
-        // but for now Destroying helps performance.
-        Destroy(unit.gameObject);
+        Debug.Log($"{unit.unitData.unitName} Reborn triggered!");
+        unit.hasReborn = false;
+        unit.currentHealth = 1;
+        unit.UpdateVisuals();
+        return;
     }
+
+    if (AudioManager.instance != null) AudioManager.instance.PlaySFX(deathClip);
+
+    Transform oldBoard = unit.transform.parent;
+
+    // FIX: Trigger deathrattle BEFORE moving to graveyard/deactivating
+    if (AbilityManager.instance != null)
+    {
+        try 
+        { 
+            Debug.Log($"[DEATHRATTLE] Triggering OnDeath for {unit.unitData.unitName}");
+            AbilityManager.instance.TriggerAbilities(AbilityTrigger.OnDeath, unit, oldBoard); 
+            AbilityManager.instance.TriggerAllyDeathAbilities(unit, oldBoard);
+        }
+        catch (System.Exception e) { Debug.LogError($"Deathrattle error: {e.Message}"); }
+    }
+
+    // Now move to graveyard and deactivate
+    if (graveyard != null) unit.transform.SetParent(graveyard);
+    unit.gameObject.SetActive(false); 
+    
+    Destroy(unit.gameObject);
+}
 
     IEnumerator AnimateAttack(Transform attacker, Transform target)
     {
@@ -394,6 +429,7 @@ public class CombatManager : MonoBehaviour
             if (LobbyManager.instance.GetNextOpponent() == null)
             {
                 Debug.Log("Victory! No opponents remaining.");
+                // WIN CONDITION HERE
                 if (DeathSaveManager.instance != null) 
                 {
                      GameManager.instance.currentPhase = GameManager.GamePhase.Death;
@@ -406,7 +442,8 @@ public class CombatManager : MonoBehaviour
         if (GameManager.instance.playerHealth <= 0) 
         {
             GameManager.instance.currentPhase = GameManager.GamePhase.Death;
-            DeathSaveManager.instance.StartDeathSequence();
+            if (DeathSaveManager.instance != null)
+                DeathSaveManager.instance.StartDeathSequence();
         }
         else 
         {
@@ -459,25 +496,24 @@ public class CombatManager : MonoBehaviour
 
             if (snap.isGolden) cd.MakeGolden(); 
             
+            // Restore Permanent stats
             cd.permanentAttack = snap.permAttack;
             cd.permanentHealth = snap.permHealth;
             
+            // Clear temporary combat buffs
+            cd.ClearTempStats();
             cd.ResetToPermanent();
             cd.UpdateVisuals(); 
         }
 
         GameManager.instance.turnNumber++;
-        GameManager.instance.StartRecruitPhase();
-        
-        if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
+    GameManager.instance.StartRecruitPhase();
+    
+    if (AbilityManager.instance != null) AbilityManager.instance.RecalculateAuras();
 
-        ShopManager shop = FindFirstObjectByType<ShopManager>();
-        if (shop != null) 
-        {
-            shop.ReduceUpgradeCost();
-            shop.HandleTurnStartRefresh(); 
-        }
-        
-        Debug.Log("--- RETURN TO SHOP ---");
-    }
+    // FIX: Removed duplicate shop calls. StartRecruitPhase() already calls HandleTurnStartRefresh()
+    // which internally calls ReduceUpgradeCost(). The duplicate calls were causing 
+    // upgrade cost to reduce by 2-3g per turn instead of 1g.
+    
+    Debug.Log("--- RETURN TO SHOP ---");
 }

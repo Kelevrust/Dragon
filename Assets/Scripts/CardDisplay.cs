@@ -31,9 +31,14 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     [Header("State")]
     public bool isPurchased = false; 
     public bool isGolden = false;
+    private bool isInitialized = false; // NEW: Prevent double-loading
 
     public int permanentAttack;
     public int permanentHealth;
+    
+    public int tempAttack;
+    public int tempHealth;
+
     public int currentAttack;
     public int currentHealth;
     
@@ -69,7 +74,14 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     void Start()
     {
         InitializeColors();
-        if (unitData != null && !isGolden) LoadUnit(unitData);
+        
+        // FIX: Only load if we haven't already. 
+        // If GameManager instantiated this and called LoadUnit(), isInitialized will be true.
+        // If this is a prefab in the scene or debug, it will be false.
+        if (unitData != null && !isInitialized) 
+        {
+            LoadUnit(unitData);
+        }
         
         canvasGroup = GetComponent<CanvasGroup>();
         if (canvasGroup == null) canvasGroup = gameObject.AddComponent<CanvasGroup>();
@@ -92,41 +104,59 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
 
     public void LoadUnit(UnitData data)
     {
+        // If already initialized and we are just refreshing visual data (e.g. for a golden upgrade that was handled externally), 
+        // we might want to skip resetting stats. 
+        // But LoadUnit implies a full reset to the UnitData template.
+        
+        isInitialized = true;
         InitializeColors();
         unitData = data;
         
-        // Clone abilities to local list for runtime modification
         runtimeAbilities.Clear();
         if (data.abilities != null)
         {
             runtimeAbilities.AddRange(data.abilities);
         }
         
-        // Initialize Base Stats
-        if (!isGolden)
+        // Only reset permanent stats if we aren't already set up (e.g. by GameManager for a Golden unit)
+        // A simple check is: are stats 0? 
+        if (permanentAttack == 0 && permanentHealth == 0)
         {
-            permanentAttack = data.baseAttack;
-            permanentHealth = data.baseHealth;
+            if (!isGolden)
+            {
+                permanentAttack = data.baseAttack;
+                permanentHealth = data.baseHealth;
+            }
+            else
+            {
+                // If loading a golden unit directly (debug?), set base stats doubled
+                permanentAttack = data.baseAttack * 2;
+                permanentHealth = data.baseHealth * 2;
+            }
         }
         
-        // Initialize Permanent Keywords from Data
+        // Initialize Keywords
         permDivineShield = data.hasDivineShield;
         permReborn = data.hasReborn;
         permTaunt = data.hasTaunt;
         permStealth = data.hasStealth;
         permPoison = data.hasPoison;
         permVenomous = data.hasVenomous;
-        // permRush will default false if not in data, or update data first
+        permRush = data.hasRush;
 
         damageTaken = 0;
+        tempAttack = 0;
+        tempHealth = 0;
+        
         ResetToPermanent();
         UpdateVisuals();
     }
 
     public void ResetToPermanent()
     {
-        currentAttack = permanentAttack;
-        currentHealth = permanentHealth - damageTaken;
+        // FIX: Include temporary buffs in calculation so Aura recalculation doesn't wipe them
+        currentAttack = permanentAttack + tempAttack;
+        currentHealth = (permanentHealth + tempHealth) - damageTaken;
 
         // Reset Keywords to their permanent state
         hasDivineShield = permDivineShield;
@@ -138,15 +168,20 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         hasRush = permRush;
     }
 
+    public void ClearTempStats()
+    {
+        tempAttack = 0;
+        tempHealth = 0;
+        damageTaken = 0; 
+        ResetToPermanent();
+    }
+
     public void MakeGolden()
     {
         isGolden = true;
-        permanentAttack = unitData.baseAttack * 2;
-        permanentHealth = unitData.baseHealth * 2;
+        // Visuals only here. GameManager handles the math of doubling base stats + adding buffs.
         
         transform.DOPunchScale(Vector3.one * 0.2f, 0.5f, 10, 1);
-        
-        ResetToPermanent();
         UpdateVisuals();
     }
     
@@ -159,7 +194,6 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         }
     }
 
-    // API to grant keywords with persistence logic
     public void GainKeyword(KeywordType keyword, bool isPermanent)
     {
         switch (keyword)
@@ -209,8 +243,7 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         damageTaken += amount;
         transform.DOShakePosition(0.2f, 3f, 20, 90, false, true);
         
-        // Update stats but keep current keywords (don't full reset)
-        currentHealth = permanentHealth - damageTaken;
+        currentHealth = (permanentHealth + tempHealth) - damageTaken;
         UpdateVisuals();
     }
     
@@ -554,7 +587,8 @@ public class CardDisplay : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
 
                 if (!isPurchased)
                 {
-                    if (GameManager.instance.TryBuyToHand(unitData, this)) 
+                    // Logic for buying directly to board
+                    if (GameManager.instance.TryBuyToBoard(unitData, this, newIndex)) 
                     {
                         actionHandled = true;
                     }
